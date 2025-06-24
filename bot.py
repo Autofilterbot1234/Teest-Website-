@@ -8,13 +8,13 @@ from urllib.parse import quote_plus
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 
-# Load .env
+# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 
-# Config
+# Configuration
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = "moviedokan_db"
@@ -22,7 +22,7 @@ COLLECTION_NAME = "movies"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-# MongoDB
+# MongoDB Connection
 client = None
 try:
     if MONGO_URI:
@@ -31,44 +31,45 @@ try:
         movies_collection = db[COLLECTION_NAME]
         movies_collection.create_index([("title", "text")])
         movies_collection.create_index("slug", unique=True)
-        print("✅ Connected to MongoDB!")
+        print("Connected to MongoDB successfully!")
     else:
-        print("⚠️ MONGO_URI not set.")
+        print("MONGO_URI not set. MongoDB operations disabled.")
 except Exception as e:
     print(f"MongoDB connection error: {e}")
     client = None
 
-# Genres cache
+# Genre Cache
 genre_map = {}
+
 def fetch_tmdb_genres():
     global genre_map
     if not genre_map and TMDB_API_KEY:
         try:
-            res = requests.get(
-                f"https://api.themoviedb.org/3/genre/movie/list?api_key={TMDB_API_KEY}", timeout=10
+            response = requests.get(
+                f"https://api.themoviedb.org/3/genre/movie/list?api_key={TMDB_API_KEY}",
+                timeout=10
             )
-            res.raise_for_status()
-            data = res.json()
-            genre_map = {g['id']: g['name'] for g in data.get('genres', [])}
+            response.raise_for_status()
+            data = response.json()
+            genre_map = {genre['id']: genre['name'] for genre in data.get('genres', [])}
+            print("TMDb genres cached successfully")
         except Exception as e:
-            print(f"Genre fetch failed: {e}")
+            print(f"Error fetching genres: {e}")
+
 fetch_tmdb_genres()
 
-# Auth Decorator
+# Authentication decorator
 def admin_required(f):
     @wraps(f)
-    def decorated(*args, **kwargs):
+    def decorated_function(*args, **kwargs):
         auth = request.authorization
         if not auth or not (auth.username == ADMIN_USERNAME and auth.password == ADMIN_PASSWORD):
             return ('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
         return f(*args, **kwargs)
-    return decorated
+    return decorated_function
 
 # HTML Templates
-base_html = '''<!DOCTYPE html>
-<html><head><title>{title}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>{css}</style></head><body>{content}</body></html>'''
+base_html = '''<!DOCTYPE html><html><head><title>{title}</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>{css}</style></head><body>{content}</body></html>'''
 
 index_css = '''body { font-family: sans-serif; background: #f9f9f9; margin:0; }
 .header { background: #c62828; color:white; padding:15px; text-align:center; }
@@ -98,7 +99,7 @@ button{background:#4CAF50;color:white;padding:10px 15px;border:none;cursor:point
 <button type="submit">Add Movie</button>
 </form></body></html>'''
 
-# Helpers
+# Helper Functions
 def get_movie_by_slug(slug):
     if not client:
         return None
@@ -169,12 +170,10 @@ def movie_detail(slug):
     return render_template_string(
         base_html.format(
             title=f"{movie['title']} | MovieDokan",
-            css='''
-            body { font-family: Arial; padding: 20px; }
+            css='''body { font-family: Arial; padding: 20px; }
             .movie-container { max-width: 800px; margin: 0 auto; }
             .movie-poster { max-width: 300px; float: left; margin-right: 20px; }
-            .download-btn { display:inline-block;padding:10px 15px;background:#d32f2f;color:white;text-decoration:none;border-radius:4px;margin:5px;}
-            ''',
+            .download-btn { display:inline-block;padding:10px 15px;background:#d32f2f;color:white;text-decoration:none;border-radius:4px;margin:5px;}''',
             content=f'''
             <div class="movie-container">
                 <img src="{movie.get('poster', '')}" class="movie-poster">
@@ -209,8 +208,6 @@ def admin_panel():
             'telegram_link': request.form.get('telegram', '').strip(),
             'terabox_link': request.form.get('terabox', '').strip()
         }
-
-        # Auto-fetch missing fields from TMDb
         if (not movie_data['year'] or not movie_data['poster']) and TMDB_API_KEY:
             try:
                 search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote_plus(title)}"
@@ -226,37 +223,12 @@ def admin_panel():
                     movie_data['genre'] = ', '.join(genres) or movie_data['genre']
             except Exception as e:
                 print(f"TMDb fetch error: {e}")
-
         if save_movie(movie_data):
             return redirect(f"/movie/{movie_data['slug']}")
         else:
             return "Failed to save movie", 500
-
     return admin_html
-
-@app.route('/api/tmdb')
-def tmdb_proxy():
-    title = request.args.get('title')
-    if not title:
-        return jsonify({'error': 'title param required'}), 400
-    try:
-        url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote_plus(title)}"
-        res = requests.get(url, timeout=10).json()
-        if not res.get('results'):
-            return jsonify({'error': 'No results'}), 404
-        movie = res['results'][0]
-        details = requests.get(f"https://api.themoviedb.org/3/movie/{movie['id']}?api_key={TMDB_API_KEY}").json()
-        genres = [g['name'] for g in details.get('genres', [])]
-        return jsonify({
-            'title': details.get('title'),
-            'year': details.get('release_date', '')[:4],
-            'genre': ', '.join(genres),
-            'plot': details.get('overview', ''),
-            'poster': f"https://image.tmdb.org/t/p/w500{details.get('poster_path')}" if details.get('poster_path') else ''
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=os.getenv('DEBUG', 'False') == 'True')
+    app.run(host='0.0.0.0', port=port, debug=True)
