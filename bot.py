@@ -1,5 +1,6 @@
 from flask import Flask, request, redirect, url_for, jsonify, render_template_string
-import os, json, uuid
+import os
+import uuid
 import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -28,7 +29,6 @@ try:
         client = MongoClient(MONGO_URI, connectTimeoutMS=30000, socketTimeoutMS=None)
         db = client[DATABASE_NAME]
         movies_collection = db[COLLECTION_NAME]
-        # Create indexes for better performance
         movies_collection.create_index([("title", "text")])
         movies_collection.create_index("slug", unique=True)
         print("Connected to MongoDB successfully!")
@@ -56,7 +56,6 @@ def fetch_tmdb_genres():
         except Exception as e:
             print(f"Error fetching genres: {e}")
 
-# Initialize at startup
 fetch_tmdb_genres()
 
 # Authentication decorator
@@ -71,7 +70,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# HTML Templates (optimized and secured)
+# HTML Templates
 base_html = '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,36 +158,38 @@ index_css = '''body {
     margin-top: 20px;
 }'''
 
-index_html = base_html.format(
-    title="MovieDokan - Home",
-    css=index_css,
-    content='''
-    <div class="header">
-        <h1>MOVIE DOKAN</h1>
-    </div>
-    
-    <div class="notice-bar">
-        Notice: Join our Telegram for latest updates
-    </div>
-    
-    <div class="button-section">
-        <a href="#" class="btn btn-red">Adult & Bangla Dubbed</a>
-        <a href="https://t.me/your_channel" class="btn btn-blue" target="_blank">Join Telegram</a>
-        <a href="#" class="btn btn-purple">Ads Free Website</a>
-        <a href="#" class="btn btn-blue">How To Download</a>
-    </div>
-    
-    <div class="movie-grid">
-        {movie_cards}
-    </div>
-    
-    <div class="footer">
-        <p>© 2023 MovieDokan | All Rights Reserved</p>
-    </div>
-    '''
-)
+admin_html = '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        form { max-width: 600px; margin: 0 auto; }
+        input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; }
+        button { background: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Add New Movie</h1>
+    <form method="POST">
+        <input type="text" name="title" placeholder="Title" required>
+        <input type="text" name="year" placeholder="Year">
+        <input type="text" name="genre" placeholder="Genre">
+        <textarea name="plot" placeholder="Plot"></textarea>
+        <input type="text" name="poster" placeholder="Poster URL">
+        <input type="text" name="telegram" placeholder="Telegram Link">
+        <input type="text" name="terabox" placeholder="Terabox Link">
+        <button type="submit">Add Movie</button>
+    </form>
+</body>
+</html>'''
 
 # Helper Functions
+def get_movie_by_slug(slug):
+    if not client:
+        return None
+    return movies_collection.find_one({"slug": slug}, {'_id': 0})
+
 def generate_movie_cards(movies):
     cards = []
     for movie in movies:
@@ -213,12 +214,10 @@ def save_movie(movie_data):
         return False
     
     try:
-        # Generate slug
         slug_base = ''.join(c for c in movie_data['title'].lower() if c.isalnum() or c == ' ')
         slug_base = slug_base.replace(' ', '-')[:40]
         movie_data['slug'] = f"{slug_base}-{str(uuid.uuid4())[:8]}"
         
-        # Insert with error handling
         result = movies_collection.insert_one(movie_data)
         return result.inserted_id is not None
     except Exception as e:
@@ -230,25 +229,50 @@ def save_movie(movie_data):
 def home():
     movies = get_all_movies()
     return render_template_string(
-        index_html,
-        movie_cards=generate_movie_cards(movies)
-        
+        base_html.format(
+            title="MovieDokan - Home",
+            css=index_css,
+            content=f'''
+            <div class="header">
+                <h1>MOVIE DOKAN</h1>
+            </div>
+            
+            <div class="notice-bar">
+                Notice: Join our Telegram for latest updates
+            </div>
+            
+            <div class="button-section">
+                <a href="#" class="btn btn-red">Adult & Bangla Dubbed</a>
+                <a href="https://t.me/your_channel" class="btn btn-blue" target="_blank">Join Telegram</a>
+                <a href="#" class="btn btn-purple">Ads Free Website</a>
+                <a href="#" class="btn btn-blue">How To Download</a>
+            </div>
+            
+            <div class="movie-grid">
+                {generate_movie_cards(movies)}
+            </div>
+            
+            <div class="footer">
+                <p>© 2023 MovieDokan | All Rights Reserved</p>
+            </div>
+            '''
+        )
+    )
+
 @app.route('/movie/<slug>')
 def movie_detail(slug):
-    movie = get_movie_by_slug(slug) if client else None
+    movie = get_movie_by_slug(slug)
     if not movie:
         return "Movie not found", 404
         
-    return render_template_string('''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{title}</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; padding: 20px; }}
-            .movie-container {{ max-width: 800px; margin: 0 auto; }}
-            .movie-poster {{ max-width: 300px; float: left; margin-right: 20px; }}
-            .download-btn {{ 
+    return render_template_string(
+        base_html.format(
+            title=f"{movie['title']} | MovieDokan",
+            css='''
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .movie-container { max-width: 800px; margin: 0 auto; }
+            .movie-poster { max-width: 300px; float: left; margin-right: 20px; }
+            .download-btn { 
                 display: inline-block;
                 padding: 10px 15px;
                 background: #d32f2f;
@@ -256,37 +280,28 @@ def movie_detail(slug):
                 text-decoration: none;
                 border-radius: 4px;
                 margin: 5px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="movie-container">
-            <img src="{poster}" class="movie-poster">
-            <h1>{title} ({year})</h1>
-            <p><strong>Genre:</strong> {genre}</p>
-            <p>{plot}</p>
-            
-            <div style="clear: both; padding-top: 20px;">
-                <h3>Download Links:</h3>
-                <a href="{telegram_link}" class="download-btn" target="_blank">
-                    <i class="fab fa-telegram"></i> Telegram
-                </a>
-                <a href="{terabox_link}" class="download-btn" target="_blank">
-                    <i class="fas fa-download"></i> Terabox
-                </a>
+            }
+            ''',
+            content=f'''
+            <div class="movie-container">
+                <img src="{movie.get('poster', '')}" class="movie-poster">
+                <h1>{movie['title']} ({movie.get('year', 'N/A')})</h1>
+                <p><strong>Genre:</strong> {movie.get('genre', 'N/A')}</p>
+                <p>{movie.get('plot', 'No description available')}</p>
+                
+                <div style="clear: both; padding-top: 20px;">
+                    <h3>Download Links:</h3>
+                    <a href="{movie.get('telegram_link', '#')}" class="download-btn" target="_blank">
+                        <i class="fab fa-telegram"></i> Telegram
+                    </a>
+                    <a href="{movie.get('terabox_link', '#')}" class="download-btn" target="_blank">
+                        <i class="fas fa-download"></i> Terabox
+                    </a>
+                </div>
             </div>
-        </div>
-    </body>
-    </html>
-    '''.format(
-        title=movie['title'],
-        year=movie.get('year', 'N/A'),
-        genre=movie.get('genre', 'N/A'),
-        plot=movie.get('plot', 'No description available'),
-        poster=movie.get('poster', ''),
-        telegram_link=movie.get('telegram_link', '#'),
-        terabox_link=movie.get('terabox_link', '#')
-    ))
+            '''
+        )
+    )
 
 @app.route('/admin', methods=['GET', 'POST'])
 @admin_required
@@ -310,7 +325,7 @@ def admin_panel():
         else:
             return "Failed to save movie", 500
             
-    return render_template_string(admin_html)
+    return admin_html
 
 @app.route('/api/tmdb', methods=['GET'])
 def tmdb_api_proxy():
@@ -319,7 +334,6 @@ def tmdb_api_proxy():
         return jsonify({'error': 'Title parameter is required'}), 400
         
     try:
-        # Search TMDb
         search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote_plus(title)}"
         search_res = requests.get(search_url, timeout=10)
         search_res.raise_for_status()
@@ -328,14 +342,12 @@ def tmdb_api_proxy():
         if not results:
             return jsonify({'error': 'No results found'}), 404
             
-        # Get details for first result
         movie_id = results[0]['id']
         details_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}"
         details_res = requests.get(details_url, timeout=10)
         details_res.raise_for_status()
         details = details_res.json()
         
-        # Process genres
         genres = [genre_map.get(g_id, '') for g_id in details.get('genre_ids', [])]
         genres = ', '.join(filter(None, genres))
         
