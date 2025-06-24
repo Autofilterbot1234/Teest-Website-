@@ -1,8 +1,9 @@
-from flask import Flask, request, redirect, url_for, Markup, jsonify
+from flask import Flask, request, redirect, url_for, jsonify
 import os, json, uuid
 import requests
 from dotenv import load_dotenv # For loading environment variables
 from pymongo import MongoClient # For MongoDB
+from urllib.parse import quote_plus # For safely encoding URL parameters
 
 # Load environment variables from .env file
 load_dotenv()
@@ -16,16 +17,49 @@ MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = "moviedokan_db" # You can choose your database name
 COLLECTION_NAME = "movies"
 
+# --- Global variable to store genre map (to avoid repeated API calls) ---
+genre_map = {}
+
 # --- MongoDB Connection ---
+client = None # Initialize client as None
 try:
-    client = MongoClient(MONGO_URI)
-    db = client[DATABASE_NAME]
-    movies_collection = db[COLLECTION_NAME]
-    print("Connected to MongoDB successfully!")
+    if MONGO_URI: # Only try to connect if URI is provided
+        client = MongoClient(MONGO_URI)
+        db = client[DATABASE_NAME]
+        movies_collection = db[COLLECTION_NAME]
+        print("Connected to MongoDB successfully!")
+    else:
+        print("MONGO_URI is not set. MongoDB operations will fail.")
 except Exception as e:
     print(f"Error connecting to MongoDB: {e}")
-    # Exit or handle error appropriately in a real app
-    # For now, we'll let it continue but operations will fail
+    client = None # Ensure client is None if connection fails
+
+# --- Function to fetch and cache TMDb Genres ---
+def fetch_tmdb_genres():
+    global genre_map
+    if genre_map: # If already fetched, return
+        return
+
+    if not TMDB_API_KEY:
+        print("TMDB_API_KEY not set. Cannot fetch genres.")
+        return
+
+    genre_url = f"https://api.themoviedb.org/3/genre/movie/list?api_key={TMDB_API_KEY}"
+    try:
+        response = requests.get(genre_url)
+        response.raise_for_status()
+        data = response.json()
+        if data and data.get('genres'):
+            genre_map = {genre['id']: genre['name'] for genre in data['genres']}
+            print("TMDb Genres fetched and cached.")
+        else:
+            print("Failed to fetch genres from TMDb.")
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching TMDb genres: {e}")
+
+# Call this function once at app startup
+with app.app_context(): # Run this within the app context
+    fetch_tmdb_genres()
 
 # --- HTML Templates (admin_html will have significant changes) ---
 # No change needed for index, search, movie HTML for now, focus on admin_html
@@ -482,7 +516,7 @@ admin_html = '''
 
                 // Populate the form fields
                 yearInput.value = data.year || '';
-                genreInput.value = data.genre || '';
+                genreInput.value = data.genre || ''; // Now should be names
                 plotInput.value = data.plot || '';
                 posterInput.value = data.poster || '';
 
@@ -506,35 +540,46 @@ admin_html = '''
 '''
 
 # --- Data Helpers (Updated for MongoDB) ---
-# Use movies_collection instead of load_movies/save_movies
+# Check if movies_collection is initialized before using it
 def get_all_movies():
+    if client is None:
+        print("MongoDB client not initialized.")
+        return []
     return list(movies_collection.find({}, {'_id': 0})) # Exclude MongoDB's default _id field
 
 def save_movie(movie_data):
+    if client is None:
+        print("MongoDB client not initialized. Cannot save movie.")
+        return False
     # Ensure slug is unique, even though we generate UUID
     if movies_collection.find_one({"slug": movie_data['slug']}):
         # If slug already exists, generate a new one (unlikely with UUID, but good practice)
         movie_data['slug'] += '-' + str(uuid.uuid4())[:4] # Append more unique characters
     movies_collection.insert_one(movie_data)
+    return True
 
 def get_movie_by_slug(slug):
+    if client is None:
+        print("MongoDB client not initialized.")
+        return None
     return movies_collection.find_one({"slug": slug}, {'_id': 0}) # Exclude _id field
 
 # --- Routes ---
 @app.route('/')
 def home():
-    movies = get_all_movies()
-    # For display, we'll use dummy movie cards as in screenshot 1
-    # If you want dynamic movie cards from DB, you'll need to generate HTML for them here
-    trending_list = "" # Static cards are in index_html for visual representation
-
-    return index_html.format(trending_list=trending_list)
+    # In a real app, you'd fetch trending movies from MongoDB or a separate source
+    # For now, keeping the static HTML as per the screenshot
+    return index_html.format(trending_list="")
 
 @app.route('/search')
 def search():
     q = request.args.get("q", "").lower()
-    # Search in MongoDB
-    results = list(movies_collection.find({"title": {"$regex": q, "$options": "i"}}, {'_id': 0})) # Case-insensitive search
+    if client is None:
+        results = []
+    else:
+        # Search in MongoDB
+        results = list(movies_collection.find({"title": {"$regex": q, "$options": "i"}}, {'_id': 0})) # Case-insensitive search
+    
     results_list = ''
     for m in results:
         results_list += f'<li><a href="/movie/{m["slug"]}">{m["title"]} ({m["year"]})</a></li>'
@@ -554,11 +599,11 @@ def get_tmdb_movie_info():
     if not title:
         return jsonify({"error": "Title parameter is missing"}), 400
 
-    if not TMDB_API_KEY or TMDB_API_KEY == "YOUR_TMDB_API_KEY":
+    if not TMDB_API_KEY or TMDB_API_KEY == "YOUR_TMDB_API_KEY": # Check for placeholder
         return jsonify({"error": "TMDb API Key is not configured in .env."}), 500
     
     # TMDb Search API
-    tmdb_search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={requests.utils.quote(title)}"
+    tmdb_search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote_plus(title)}"
 
     try:
         response = requests.get(tmdb_search_url)
@@ -569,6 +614,14 @@ def get_tmdb_movie_info():
             # Take the first result
             first_result = search_results["results"][0]
             
+            # Convert genre_ids to genre names
+            genres = []
+            if first_result.get("genre_ids"):
+                for genre_id in first_result["genre_ids"]:
+                    if genre_id in genre_map:
+                        genres.append(genre_map[genre_id])
+            genre_names = ", ".join(genres)
+
             # TMDb poster base URL
             poster_base_url = "https://image.tmdb.org/t/p/w500" # w500 for a reasonable size
 
@@ -577,8 +630,7 @@ def get_tmdb_movie_info():
                 "year": first_result.get("release_date", "")[:4], # Extract year from release_date
                 "plot": first_result.get("overview"),
                 "poster": poster_base_url + first_result.get("poster_path") if first_result.get("poster_path") else "",
-                "genre": ", ".join([str(g) for g in first_result.get("genre_ids", [])]) # TMDb returns genre_ids, not names directly
-                                                                                   # For actual genre names, you'd need another API call to /genre/movie/list
+                "genre": genre_names
             })
         else:
             return jsonify({"error": "Movie not found on TMDb."}), 404
@@ -600,7 +652,9 @@ def admin():
         terabox = request.form.get('terabox')
 
         # Simple slug generation. For production, consider a more robust slugify library.
-        slug = title.lower().replace(" ", "-").replace("(", "").replace(")", "") + '-' + str(uuid.uuid4())[:6]
+        # Ensure slug is URL-safe and handle potential duplicates
+        base_slug = "".join(c for c in title.lower() if c.isalnum() or c == ' ').replace(" ", "-")
+        slug = base_slug + '-' + str(uuid.uuid4())[:6]
 
         movie = {
             "title": title,
@@ -613,13 +667,16 @@ def admin():
             "slug": slug
         }
 
-        save_movie(movie) # Use the new save_movie function
-
-        return redirect(url_for('movie', slug=slug))
+        if save_movie(movie): # save_movie now returns True/False
+            return redirect(url_for('movie', slug=slug))
+        else:
+            return "Failed to save movie. MongoDB connection error?", 500
 
     return admin_html
 
 # --- Run ---
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True) # Set debug=False for production
+    # In production, debug should be False for security and performance
+    # debug=True is for local development only
+    app.run(host='0.0.0.0', port=port, debug=True)
