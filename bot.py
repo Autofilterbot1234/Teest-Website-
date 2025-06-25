@@ -545,25 +545,24 @@ index_html = """
     </div>
     {% endfor %}
   </div>
-  
-  <!-- Categories Section -->
-<div class="category-header">
-  <h2>Browse Categories</h2>
-</div>
-<div class="categories">
-  <a href="/" class="category-btn">All</a>
-  <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
-  <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
-  <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
-  <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
-  
-  <!-- Display genres -->
-  {% if all_genres %}
-    {% for genre in all_genres[:10] %} <!-- Limit to first 10 genres -->
-      <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
-    {% endfor %}
-  {% endif %}
-</div>
+
+  <!-- New Categories Section -->
+  <div class="category-header">
+    <h2>Browse Categories</h2>
+  </div>
+  <div class="categories">
+    <a href="/" class="category-btn">All</a>
+    <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
+    <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
+    <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
+    <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
+    <!-- Add more genres if you have them in your data -->
+    {% if movies and movies[0].genres %}
+      {% for genre in movies[0].genres[:6] %} <!-- Show first 6 genres -->
+        <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
+      {% endfor %}
+    {% endif %}
+  </div>
 
   {# Conditional rendering for full list pages vs. homepage sections #}
   {% if is_full_page_list %}
@@ -1891,24 +1890,74 @@ edit_html = """
 """
 # --- END OF edit_html TEMPLATE ---
 
-<!-- Categories Section -->
-<div class="category-header">
-  <h2>Browse Categories</h2>
-</div>
-<div class="categories">
-  <a href="/" class="category-btn">All</a>
-  <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
-  <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
-  <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
-  <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
-  
-  <!-- Display genres -->
-  {% if all_genres %}
-    {% for genre in all_genres[:10] %} <!-- Limit to first 10 genres -->
-      <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
-    {% endfor %}
-  {% endif %}
-</div>
+@app.route('/')
+def home():
+    query = request.args.get('q')
+    genre_filter = request.args.get('genre')  # New: For genre filtering
+    
+    movies_list = []
+    trending_movies_list = []
+    latest_movies_list = []
+    latest_series_list = []
+    coming_soon_movies_list = []
+
+    # is_full_page_list = False for the homepage
+    is_full_page_list = False
+
+    if query:
+        # Search functionality remains the same
+        result = movies.find({"title": {"$regex": query, "$options": "i"}})
+        movies_list = list(result)
+        is_full_page_list = True # Search results should also be vertical
+    elif genre_filter:
+        # Filter by genre if genre parameter is present
+        result = movies.find({"genres": genre_filter})
+        movies_list = list(result)
+        is_full_page_list = True
+    else:
+        # Fetch data for each category on the homepage with a limit of 12
+        # Trending (quality == 'TRENDING')
+        trending_movies_result = movies.find({"quality": "TRENDING"}).sort('_id', -1).limit(12)
+        trending_movies_list = list(trending_movies_result)
+
+        # Latest Movies (type == 'movie', not trending, not coming soon)
+        latest_movies_result = movies.find({
+            "type": "movie",
+            "quality": {"$ne": "TRENDING"},
+            "is_coming_soon": {"$ne": True}
+        }).sort('_id', -1).limit(12)
+        latest_movies_list = list(latest_movies_result)
+
+        # Latest Web Series (type == 'series', not trending, not coming soon)
+        latest_series_result = movies.find({
+            "type": "series",
+            "quality": {"$ne": "TRENDING"},
+            "is_coming_soon": {"$ne": True}
+        }).sort('_id', -1).limit(12)
+        latest_series_list = list(latest_series_result)
+
+        # Coming Soon (is_coming_soon == True)
+        coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
+        coming_soon_movies_list = list(coming_soon_result)
+
+    # Get featured movies for hero slider (first 3 trending movies)
+    featured_movies = list(movies.find({"quality": "TRENDING"}).limit(3))
+    
+    # Convert ObjectIds to strings for all fetched lists
+    for m in movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + featured_movies:
+        m['_id'] = str(m['_id']) 
+
+    return render_template_string(
+        index_html, 
+        movies=movies_list, # Only used for search results or full page lists
+        query=query,
+        trending_movies=trending_movies_list,
+        latest_movies=latest_movies_list,
+        latest_series=latest_series_list,
+        coming_soon_movies=coming_soon_movies_list,
+        featured_movies=featured_movies, # Pass featured movies to template
+        is_full_page_list=is_full_page_list # Pass this flag to the template
+    )
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
