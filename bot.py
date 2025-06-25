@@ -66,7 +66,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
-# --- START OF index_html TEMPLATE --- (পরিবর্তিত)
+# --- START OF UPDATED index_html TEMPLATE ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -146,6 +146,82 @@ index_html = """
     padding-bottom: 70px; /* Space for bottom nav */
   }
 
+  /* New Hero Slider Styles */
+  .hero-slider {
+    width: 100%;
+    height: 400px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  }
+  .hero-slide {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+  }
+  .hero-slide.active {
+    opacity: 1;
+  }
+  .hero-slide-content {
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    padding: 20px;
+    width: 100%;
+    color: #fff;
+  }
+  .hero-slide h3 {
+    font-size: 28px;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.8);
+  }
+  .hero-slide p {
+    font-size: 16px;
+    margin-bottom: 15px;
+    max-width: 600px;
+  }
+  .hero-slide .btn {
+    background: #1db954;
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    display: inline-block;
+    transition: all 0.3s ease;
+  }
+  .hero-slide .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
+
+  /* New Categories Section */
+  .categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 30px;
+  }
+  .category-btn {
+    background: #282828;
+    color: #eee;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+  }
+  .category-btn:hover {
+    background: #1db954;
+    color: #000;
+  }
+
   /* Category Section Header */
   .category-header {
       display: flex;
@@ -174,7 +250,6 @@ index_html = """
       background: #555;
       color: #1db954;
   }
-
 
   /* Movie Grid and Card Styles */
   .grid {
@@ -282,6 +357,19 @@ index_html = """
       content: ''; /* No extra content needed for this style */
   }
 
+  /* New Top Rated Badge */
+  .top-rated-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #ff9800;
+    color: #000;
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 5px;
+    z-index: 2;
+  }
+
   /* New styles for overlay text on poster */
   .overlay-text {
       position: absolute;
@@ -336,6 +424,13 @@ index_html = """
     input[type="search"] { max-width: unset; font-size: 14px; padding: 6px 10px; }
     main { margin: 15px auto; padding: 0 10px; padding-bottom: 60px; }
     
+    .hero-slider {
+      height: 300px;
+    }
+    .hero-slide h3 {
+      font-size: 22px;
+    }
+    
     .category-header { margin-bottom: 15px; padding: 8px 0; }
     .category-header h2 { font-size: 18px; }
     .category-header .see-all-btn { padding: 6px 10px; font-size: 12px; }
@@ -377,6 +472,18 @@ index_html = """
   }
 
   @media (max-width: 480px) {
+      .hero-slider {
+        height: 250px;
+      }
+      .hero-slide h3 {
+        font-size: 18px;
+      }
+      .hero-slide p {
+        font-size: 14px;
+      }
+      .categories {
+        justify-content: center;
+      }
       .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
       .vertical-grid {
           grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -425,6 +532,38 @@ index_html = """
   </form>
 </header>
 <main>
+  <!-- New Hero Slider Section -->
+  <div class="hero-slider">
+    {% for m in featured_movies[:3] %} <!-- Show first 3 trending as hero slides -->
+    <div class="hero-slide {% if loop.first %}active{% endif %}" 
+         style="background-image: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.3)), url('{{ m.poster if m.poster else 'https://via.placeholder.com/800x450?text=MovieZone' }}');">
+      <div class="hero-slide-content">
+        <h3>{{ m.title }}</h3>
+        <p>{{ m.overview[:150] }}{% if m.overview|length > 150 %}...{% endif %}</p>
+        <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="btn">View Details</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- New Categories Section -->
+  <div class="category-header">
+    <h2>Browse Categories</h2>
+  </div>
+  <div class="categories">
+    <a href="/" class="category-btn">All</a>
+    <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
+    <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
+    <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
+    <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
+    <!-- Add more genres if you have them in your data -->
+    {% if movies and movies[0].genres %}
+      {% for genre in movies[0].genres[:6] %} <!-- Show first 6 genres -->
+        <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
+      {% endfor %}
+    {% endif %}
+  </div>
+
   {# Conditional rendering for full list pages vs. homepage sections #}
   {% if is_full_page_list %}
     <div class="category-header">
@@ -458,6 +597,9 @@ index_html = """
     
           {% if m.quality %}
             <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
+          {% endif %}
+          {% if m.vote_average and m.vote_average >= 8 %}
+            <div class="top-rated-badge">TOP RATED</div>
           {% endif %}
           <div class="movie-info">
             <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
@@ -500,6 +642,9 @@ index_html = """
             {% if m.quality %}
               <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
             {% endif %}
+            {% if m.vote_average and m.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
+            {% endif %}
             <div class="movie-info">
               <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
               <div class="movie-year">{{ m.year }}</div>
@@ -540,6 +685,9 @@ index_html = """
       
             {% if m.quality %}
               <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
+            {% endif %}
+            {% if m.vote_average and m.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
             {% endif %}
             <div class="movie-info">
               <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
@@ -582,6 +730,9 @@ index_html = """
             {% if m.quality %}
               <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
             {% endif %}
+            {% if m.vote_average and m.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
+            {% endif %}
             <div class="movie-info">
               <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
               <div class="movie-year">{{ m.year }}</div>
@@ -623,6 +774,9 @@ index_html = """
             {% if m.quality %}
               <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
             {% endif %}
+            {% if m.vote_average and m.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
+            {% endif %}
             <div class="movie-info">
               <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
               <div class="movie-year">{{ m.year }}</div>
@@ -658,6 +812,9 @@ index_html = """
             {% if m.quality %}
               <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
             {% endif %}
+            {% if m.vote_average and m.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
+            {% endif %}
             <div class="movie-info">
               <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
               <div class="movie-year">{{ m.year }}</div>
@@ -691,13 +848,33 @@ index_html = """
     <span>Search</span>
   </a>
 </nav>
+
+<script>
+  // Hero Slider Auto-rotation
+  let currentSlide = 0;
+  const slides = document.querySelectorAll('.hero-slide');
+  
+  function showSlide(index) {
+    slides.forEach(slide => slide.classList.remove('active'));
+    slides[index].classList.add('active');
+  }
+  
+  function nextSlide() {
+    currentSlide = (currentSlide + 1) % slides.length;
+    showSlide(currentSlide);
+  }
+  
+  // Change slide every 5 seconds
+  if (slides.length > 1) {
+    setInterval(nextSlide, 5000);
+  }
+</script>
 </body>
 </html>
 """
-# --- END OF index_html TEMPLATE ---
+# --- END OF UPDATED index_html TEMPLATE ---
 
-
-# --- START OF detail_html TEMPLATE --- (কোন পরিবর্তন নেই)
+# --- START OF detail_html TEMPLATE --- (Unchanged from your original)
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -992,6 +1169,9 @@ detail_html = """
             {% elif movie.quality %}
               <div class="badge {% if movie.quality == 'TRENDING' %}trending{% endif %}">{{ movie.quality }}</div>
             {% endif %}
+            {% if movie.vote_average and movie.vote_average >= 8 %}
+              <div class="top-rated-badge">TOP RATED</div>
+            {% endif %}
         </div>
         <div class="detail-info">
           <h2 class="detail-title">{{ movie.title }}</h2>
@@ -1076,8 +1256,7 @@ detail_html = """
 """
 # --- END OF detail_html TEMPLATE ---
 
-
-# --- START OF admin_html TEMPLATE --- (সার্চ ফর্ম সহ নতুন কোড)
+# --- START OF admin_html TEMPLATE --- (Unchanged from your original)
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -1425,8 +1604,7 @@ admin_html = """
 """
 # --- END OF admin_html TEMPLATE ---
 
-
-# --- START OF edit_html TEMPLATE --- (কোন পরিবর্তন নেই)
+# --- START OF edit_html TEMPLATE --- (Unchanged from your original)
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -1712,10 +1890,10 @@ edit_html = """
 """
 # --- END OF edit_html TEMPLATE ---
 
-
 @app.route('/')
 def home():
     query = request.args.get('q')
+    genre_filter = request.args.get('genre')  # New: For genre filtering
     
     movies_list = []
     trending_movies_list = []
@@ -1731,6 +1909,11 @@ def home():
         result = movies.find({"title": {"$regex": query, "$options": "i"}})
         movies_list = list(result)
         is_full_page_list = True # Search results should also be vertical
+    elif genre_filter:
+        # Filter by genre if genre parameter is present
+        result = movies.find({"genres": genre_filter})
+        movies_list = list(result)
+        is_full_page_list = True
     else:
         # Fetch data for each category on the homepage with a limit of 12
         # Trending (quality == 'TRENDING')
@@ -1757,8 +1940,11 @@ def home():
         coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
         coming_soon_movies_list = list(coming_soon_result)
 
+    # Get featured movies for hero slider (first 3 trending movies)
+    featured_movies = list(movies.find({"quality": "TRENDING"}).limit(3))
+    
     # Convert ObjectIds to strings for all fetched lists
-    for m in movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list:
+    for m in movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + featured_movies:
         m['_id'] = str(m['_id']) 
 
     return render_template_string(
@@ -1769,6 +1955,7 @@ def home():
         latest_movies=latest_movies_list,
         latest_series=latest_series_list,
         coming_soon_movies=coming_soon_movies_list,
+        featured_movies=featured_movies, # Pass featured movies to template
         is_full_page_list=is_full_page_list # Pass this flag to the template
     )
 
