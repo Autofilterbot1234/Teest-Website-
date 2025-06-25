@@ -66,7 +66,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
-# --- START OF index_html TEMPLATE --- (কোন পরিবর্তন নেই)
+# --- START OF index_html TEMPLATE --- (পরিবর্তিত)
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -179,34 +179,14 @@ index_html = """
   /* Movie Grid and Card Styles */
   .grid {
     display: grid;
-    grid-auto-flow: column; /* Changed to flow horizontally */
-    grid-auto-columns: minmax(180px, 1fr); /* Set column width for horizontal flow */
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 20px;
-    margin-bottom: 40px; /* Space after each grid section */
-    overflow-x: auto; /* Enable horizontal scrolling */
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-    scroll-snap-type: x mandatory; /* Snap to items */
-    padding-bottom: 10px; /* Add padding for scrollbar */
+    margin-bottom: 40px;
   }
 
-  /* New style for vertical grid layout (for "See All" pages) */
+  /* Style for vertical grid layout (for "See All" pages) */
   .vertical-grid {
-    grid-auto-flow: row; /* Change to flow vertically */
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* 3-5 columns on desktop */
-    overflow-x: visible; /* Disable horizontal scrolling */
-    -webkit-overflow-scrolling: auto; /* Revert scrolling */
-    scroll-snap-type: none; /* Disable snapping */
-    padding-bottom: 0; /* No extra padding for scrollbar */
-  }
-
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .grid::-webkit-scrollbar {
-    display: none;
-  }
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .grid {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 
   .movie-card {
@@ -218,8 +198,6 @@ index_html = """
     position: relative; /* Crucial for positioning child elements */
     cursor: pointer;
     border: 2px solid transparent; /* Initial transparent border for smooth transition */
-    scroll-snap-align: start; /* Snap to start of item */
-    flex-shrink: 0; /* Ensure cards don't shrink */
   }
   /* RGB border animation on hover */
   .movie-card:hover {
@@ -242,7 +220,7 @@ index_html = """
 
   .movie-poster {
     width: 100%;
-    height: 270px; /* Standard poster height - as per your request to make it larger */
+    height: 300px; /* Increased poster height */
     object-fit: cover;
     display: block;
   }
@@ -363,19 +341,16 @@ index_html = """
     .category-header .see-all-btn { padding: 6px 10px; font-size: 12px; }
 
     .grid { 
-        grid-template-columns: none; /* Disable fixed grid columns */
-        grid-auto-flow: column; /* Ensure horizontal flow */
-        grid-auto-columns: minmax(130px, 1fr); /* Slightly larger columns for mobile */
-        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
         margin-bottom: 30px;
     }
     .vertical-grid { /* Mobile adjustment for vertical grid */
-        grid-auto-flow: row;
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); /* 2-3 columns on mobile */
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 15px;
     }
     .movie-card { box-shadow: 0 0 5px rgba(0,0,0,0.5); }
-    .movie-poster { height: 180px; } /* Larger height for mobile posters */
+    .movie-poster { height: 220px; } /* Larger height for mobile posters */
     .movie-info { padding: 8px; background: rgba(0, 0, 0, 0.7); }
     .movie-title { font-size: 14px; margin: 0 0 2px 0; } /* Larger font for mobile */
     .movie-year { font-size: 11px; margin-bottom: 4px; }
@@ -402,12 +377,12 @@ index_html = """
   }
 
   @media (max-width: 480px) {
-      .grid { grid-auto-columns: minmax(120px,1fr); } /* Even smaller min width for very small screens */
+      .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
       .vertical-grid {
-          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Adjust for smaller screens */
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
           gap: 10px;
       }
-      .movie-poster { height: 160px; } /* Adjust height for very small screens */
+      .movie-poster { height: 200px; } /* Adjust height for very small screens */
   }
   /* Mobile adjustments - END */
 
@@ -465,7 +440,7 @@ index_html = """
           {% if m.poster %}
             <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
           {% else %}
-            <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+            <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
               No Image
             </div>
           {% endif %}
@@ -506,7 +481,7 @@ index_html = """
             {% if m.poster %}
               <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
             {% else %}
-              <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
                 No Image
               </div>
             {% endif %}
@@ -541,13 +516,13 @@ index_html = """
       {% if trending_movies|length == 0 %}
         <p style="text-align:center; color:#999;">No trending movies found.</p>
       {% else %}
-        <div class="grid"> {# Homepage trending grid remains horizontal #}
+        <div class="grid"> {# Homepage trending grid #}
           {% for m in trending_movies %}
           <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
             {% if m.poster %}
               <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
             {% else %}
-              <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
                 No Image
               </div>
             {% endif %}
@@ -582,13 +557,13 @@ index_html = """
       {% if latest_movies|length == 0 %}
         <p style="text-align:center; color:#999;">No movies found.</p>
       {% else %}
-        <div class="grid"> {# Homepage latest movies grid remains horizontal #}
+        <div class="grid"> {# Homepage latest movies grid #}
           {% for m in latest_movies %}
           <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
             {% if m.poster %}
               <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
             {% else %}
-              <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
                 No Image
               </div>
             {% endif %}
@@ -623,13 +598,13 @@ index_html = """
       {% if latest_series|length == 0 %}
         <p style="text-align:center; color:#999;">No TV series or web series found.</p>
       {% else %}
-        <div class="grid"> {# Homepage latest series grid remains horizontal #}
+        <div class="grid"> {# Homepage latest series grid #}
           {% for m in latest_series %}
           <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
             {% if m.poster %}
               <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
             {% else %}
-              <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
                 No Image
               </div>
             {% endif %}
@@ -664,13 +639,13 @@ index_html = """
       {% if coming_soon_movies|length == 0 %}
         <p style="text-align:center; color:#999;">No upcoming movies found.</p>
       {% else %}
-        <div class="grid"> {# Homepage coming soon grid remains horizontal #}
+        <div class="grid"> {# Homepage coming soon grid #}
           {% for m in coming_soon_movies %}
           <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
             {% if m.poster %}
               <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
             {% else %}
-              <div style="height:270px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
                 No Image
               </div>
             {% endif %}
@@ -741,7 +716,7 @@ detail_html = """
     position: sticky; top: 0; left: 0; right: 0;
     background: #181818; padding: 10px 20px;
     display: flex; justify-content: flex-start; align-items: center; z-index: 100;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.7);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.8);
   }
   header h1 {
     margin: 0; font-weight: 700; font-size: 24px;
@@ -1757,9 +1732,9 @@ def home():
         movies_list = list(result)
         is_full_page_list = True # Search results should also be vertical
     else:
-        # Fetch data for each category on the homepage with a limit of 6
+        # Fetch data for each category on the homepage with a limit of 12
         # Trending (quality == 'TRENDING')
-        trending_movies_result = movies.find({"quality": "TRENDING"}).sort('_id', -1).limit(6)
+        trending_movies_result = movies.find({"quality": "TRENDING"}).sort('_id', -1).limit(12)
         trending_movies_list = list(trending_movies_result)
 
         # Latest Movies (type == 'movie', not trending, not coming soon)
@@ -1767,7 +1742,7 @@ def home():
             "type": "movie",
             "quality": {"$ne": "TRENDING"},
             "is_coming_soon": {"$ne": True}
-        }).sort('_id', -1).limit(6)
+        }).sort('_id', -1).limit(12)
         latest_movies_list = list(latest_movies_result)
 
         # Latest Web Series (type == 'series', not trending, not coming soon)
@@ -1775,11 +1750,11 @@ def home():
             "type": "series",
             "quality": {"$ne": "TRENDING"},
             "is_coming_soon": {"$ne": True}
-        }).sort('_id', -1).limit(6)
+        }).sort('_id', -1).limit(12)
         latest_series_list = list(latest_series_result)
 
         # Coming Soon (is_coming_soon == True)
-        coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(6)
+        coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
         coming_soon_movies_list = list(coming_soon_result)
 
     # Convert ObjectIds to strings for all fetched lists
