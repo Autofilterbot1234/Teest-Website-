@@ -545,24 +545,25 @@ index_html = """
     </div>
     {% endfor %}
   </div>
-
-  <!-- New Categories Section -->
-  <div class="category-header">
-    <h2>Browse Categories</h2>
-  </div>
-  <div class="categories">
-    <a href="/" class="category-btn">All</a>
-    <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
-    <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
-    <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
-    <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
-    <!-- Add more genres if you have them in your data -->
-    {% if movies and movies[0].genres %}
-      {% for genre in movies[0].genres[:6] %} <!-- Show first 6 genres -->
-        <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
-      {% endfor %}
-    {% endif %}
-  </div>
+  
+  <!-- Categories Section -->
+<div class="category-header">
+  <h2>Browse Categories</h2>
+</div>
+<div class="categories">
+  <a href="/" class="category-btn">All</a>
+  <a href="{{ url_for('movies_only') }}" class="category-btn">Movies</a>
+  <a href="{{ url_for('webseries') }}" class="category-btn">Web Series</a>
+  <a href="{{ url_for('trending_movies') }}" class="category-btn">Trending</a>
+  <a href="{{ url_for('coming_soon') }}" class="category-btn">Coming Soon</a>
+  
+  <!-- Display genres -->
+  {% if all_genres %}
+    {% for genre in all_genres[:10] %} <!-- Limit to first 10 genres -->
+      <a href="/?genre={{ genre }}" class="category-btn">{{ genre }}</a>
+    {% endfor %}
+  {% endif %}
+</div>
 
   {# Conditional rendering for full list pages vs. homepage sections #}
   {% if is_full_page_list %}
