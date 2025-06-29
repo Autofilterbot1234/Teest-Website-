@@ -5,7 +5,7 @@ import requests, os
 from functools import wraps
 from dotenv import load_dotenv
 
-# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন (শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য)
+# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
 
 app = Flask(__name__)
@@ -15,22 +15,19 @@ MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 # --- অ্যাডমিন অথেন্টিকেশনের জন্য নতুন ভেরিয়েবল ও ফাংশন ---
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin") # এনভায়রনমেন্ট ভেরিয়েবল থেকে ইউজারনেম নিন, ডিফল্ট 'admin'
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password") # এনভায়রনমেন্ট ভেরিয়েবল থেকে পাসওয়ার্ড নিন, ডিফল্ট 'password'
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
 def check_auth(username, password):
-    """ইউজারনেম ও পাসওয়ার্ড সঠিক কিনা তা যাচাই করে।"""
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 def authenticate():
-    """অথেন্টিকেশন ব্যর্থ হলে 401 রেসপন্স পাঠায়।"""
     return Response(
     'Could not verify your access level for that URL.\n'
     'You have to login with proper credentials', 401,
     {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
-    """এই ডেকোরেটরটি রুট ফাংশনে অথেন্টিকেশন চেক করে।"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
@@ -58,7 +55,7 @@ except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
 
-# TMDb Genre Map (for converting genre IDs to names) - অপরিবর্তিত
+# TMDb Genre Map
 TMDb_Genre_Map = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10402: "Music", 9648: "Mystery",
@@ -66,7 +63,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
-# --- START OF index_html TEMPLATE --- (পরিবর্তিত)
+# --- START OF index_html TEMPLATE --- (Cinematic Thumbnails সহ আপডেটেড)
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -138,6 +135,81 @@ index_html = """
       color: #999;
   }
 
+  /* NEW: Cinematic Thumbnails Section Styles */
+  .cinematic-thumbnails {
+      width: 100%;
+      overflow-x: auto;
+      padding: 15px 0;
+      margin-bottom: 30px;
+      background: linear-gradient(to right, #000000, #1a1a1a);
+  }
+  
+  .thumbnails-container {
+      display: flex;
+      gap: 10px;
+      padding: 0 20px;
+  }
+  
+  .thumbnail-wrapper {
+      position: relative;
+      min-width: 250px;
+      height: 140px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      transition: transform 0.3s ease;
+  }
+  
+  .cinematic-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+  }
+  
+  .thumb-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+      color: white;
+      padding: 10px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+  }
+  
+  .thumbnail-wrapper:hover {
+      transform: scale(1.05);
+  }
+  
+  .thumbnail-wrapper:hover .thumb-overlay {
+      opacity: 1;
+  }
+  
+  .thumb-placeholder {
+      width: 100%;
+      height: 100%;
+      background: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #777;
+  }
+  
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+      .thumbnail-wrapper {
+          min-width: 180px;
+          height: 100px;
+      }
+      
+      .thumb-overlay {
+          font-size: 12px;
+          padding: 8px;
+      }
+  }
+
   /* Main Content Area */
   main {
     max-width: 1200px; /* Max width for content */
@@ -175,79 +247,6 @@ index_html = """
       color: #1db954;
   }
 
-  /* New: Carousel for Auto-scrolling Thumbnails */
-  .carousel-container {
-    width: 100%;
-    overflow: hidden;
-    position: relative;
-    margin-bottom: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.7);
-    background: #181818;
-  }
-  .carousel-wrapper {
-    display: flex;
-    transition: transform 0.8s ease-in-out; /* Smooth transition */
-  }
-  .carousel-slide {
-    min-width: 100%; /* Each slide takes full width of container */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    flex-shrink: 0; /* Prevent shrinking */
-  }
-  .carousel-slide img {
-    width: 100%;
-    height: 400px; /* Fixed height for carousel images */
-    object-fit: cover; /* Ensures the image covers the area */
-    display: block;
-    border-radius: 8px;
-  }
-  .carousel-title-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); /* Gradient overlay */
-    color: #fff;
-    padding: 20px;
-    text-align: left;
-  }
-  .carousel-title-overlay h3 {
-    font-size: 28px;
-    margin-bottom: 5px;
-    text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
-  }
-  .carousel-title-overlay p {
-    font-size: 16px;
-    color: #ccc;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .carousel-indicators {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    z-index: 5;
-  }
-  .indicator-dot {
-    width: 10px;
-    height: 10px;
-    background-color: rgba(255, 255, 255, 0.5);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  .indicator-dot.active {
-    background-color: #e44d26; /* Orange for active dot */
-  }
 
   /* Movie Grid and Card Styles */
   .grid {
@@ -408,20 +407,6 @@ index_html = """
     form { margin-left: 10px; }
     input[type="search"] { max-width: unset; font-size: 14px; padding: 6px 10px; }
     main { margin: 15px auto; padding: 0 10px; padding-bottom: 60px; }
-
-    /* Carousel Mobile Adjustments */
-    .carousel-slide img {
-        height: 250px; /* Shorter height on mobile */
-    }
-    .carousel-title-overlay {
-        padding: 10px;
-    }
-    .carousel-title-overlay h3 {
-        font-size: 22px;
-    }
-    .carousel-title-overlay p {
-        font-size: 14px;
-    }
     
     .category-header { margin-bottom: 15px; padding: 8px 0; }
     .category-header h2 { font-size: 18px; }
@@ -470,15 +455,6 @@ index_html = """
           gap: 10px;
       }
       .movie-poster { height: 200px; } /* Adjust height for very small screens */
-      .carousel-slide img {
-          height: 200px;
-      }
-      .carousel-title-overlay h3 {
-          font-size: 18px;
-      }
-      .carousel-title-overlay p {
-          font-size: 12px;
-      }
   }
   /* Mobile adjustments - END */
 
@@ -520,41 +496,29 @@ index_html = """
     <input type="search" name="q" placeholder="Search movies..." value="{{ query|default('') }}" />
   </form>
 </header>
-<main>
-  {# NEW: Automatic Scrolling Carousel for Trending Movies - Now uses backdrop images #}
-  {% if not query and trending_movies|length > 0 %}
-    <div class="category-header">
-      <h2>Trending on MovieZone</h2>
-      <a href="{{ url_for('trending_movies') }}" class="see-all-btn">See All</a>
-    </div>
-    <div class="carousel-container">
-      <div class="carousel-wrapper" id="trending-carousel-wrapper">
-        {% for m in trending_movies %}
-        <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
-          {% if m.backdrop %} {# Use backdrop if available #}
-            <img src="{{ m.backdrop }}" alt="{{ m.title }}">
-          {% elif m.poster %} {# Fallback to poster if no backdrop #}
-            <img src="{{ m.poster }}" alt="{{ m.title }}" style="object-fit: contain; background-color: #333;"> {# Use contain to avoid cropping vertical posters #}
-          {% else %} {# Generic placeholder #}
-            <div style="width:100%; height:400px; background:#333; display:flex;align-items:center;justify-content:center;color:#777; font-size:24px;">
-              No Image
-            </div>
-          {% endif %}
-          <div class="carousel-title-overlay">
-            <h3>{{ m.title }}</h3>
-            <p>{{ m.overview|truncate(150, true) }}</p> {# Truncate overview for carousel #}
-          </div>
-        </a>
-        {% endfor %}
-      </div>
-      <div class="carousel-indicators" id="trending-carousel-indicators">
-        {% for m in trending_movies %}
-          <span class="indicator-dot" data-slide-index="{{ loop.index0 }}"></span>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
 
+<!-- NEW: Cinematic Thumbnails Section -->
+{% if cinematic_thumbnails and not query %}
+<div class="cinematic-thumbnails">
+    <div class="category-header">
+        <h2>Cinematic Moments</h2>
+    </div>
+    <div class="thumbnails-container">
+        {% for thumb in cinematic_thumbnails %}
+        <div class="thumbnail-wrapper">
+            {% if thumb.backdrop %}
+                <img src="{{ thumb.backdrop }}" alt="{{ thumb.title }}" class="cinematic-thumb">
+                <div class="thumb-overlay">{{ thumb.title }}</div>
+            {% else %}
+                <div class="thumb-placeholder">No Thumbnail</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<main>
   {# Conditional rendering for full list pages vs. homepage sections #}
   {% if is_full_page_list %}
     <div class="category-header">
@@ -639,21 +603,46 @@ index_html = """
         </div>
       {% endif %}
     {% else %}
-      {# Existing Trending section is already a carousel #}
-      {# <div class="category-header">
+      <div class="category-header">
         <h2>Trending on MovieZone</h2>
         <a href="{{ url_for('trending_movies') }}" class="see-all-btn">See All</a>
       </div>
       {% if trending_movies|length == 0 %}
         <p style="text-align:center; color:#999;">No trending movies found.</p>
       {% else %}
-        <div class="grid"> 
+        <div class="grid"> {# Homepage trending grid #}
           {% for m in trending_movies %}
-            {# ... trending movie card ... #}
-          {# {% endfor %}
+          <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+            {% if m.poster %}
+              <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
+            {% else %}
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+                No Image
+              </div>
+            {% endif %}
+      
+            <div class="overlay-text">
+                {% if m.is_coming_soon %}
+                    <span class="label-badge coming-soon-badge">COMING SOON</span>
+                {% elif m.top_label %}
+                    <span class="label-badge custom-label">{{ m.top_label | upper }}</span>
+                {% elif m.original_language and m.original_language != 'N/A' %}
+                    <span class="label-badge">{{ m.original_language | upper }}</span>
+                {% endif %}
+                <span class="movie-top-title" title="{{ m.title }}">{{ m.title }}</span>
+            </div>
+      
+            {% if m.quality %}
+              <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
+            {% endif %}
+            <div class="movie-info">
+              <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
+              <div class="movie-year">{{ m.year }}</div>
+            </div>
+          </a>
+          {% endfor %}
         </div>
-      {% endif %} #}
-
+      {% endif %}
 
       <div class="category-header">
         <h2>Latest Movies</h2>
@@ -737,44 +726,46 @@ index_html = """
         </div>
       {% endif %}
 
-      {# UPDATED: Recently Added Section moved below Latest TV Series - NOW AS CAROUSEL #}
-      {% if recently_added|length > 0 %}
-        <div class="category-header">
-          <h2>Recently Added</h2>
-          <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
-        </div>
-        <div class="carousel-container">
-          <div class="carousel-wrapper" id="recently-added-carousel-wrapper">
-            {% for m in recently_added %}
-            <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
-              {% if m.backdrop %} {# Use backdrop if available #}
-                <img src="{{ m.backdrop }}" alt="{{ m.title }}">
-              {% elif m.poster %} {# Fallback to poster if no backdrop #}
-                <img src="{{ m.poster }}" alt="{{ m.title }}" style="object-fit: contain; background-color: #333;">
-              {% else %} {# Generic placeholder #}
-                <div style="width:100%; height:400px; background:#333; display:flex;align-items:center;justify-content:center;color:#777; font-size:24px;">
-                  No Image
-                </div>
-              {% endif %}
-              <div class="carousel-title-overlay">
-                <h3>{{ m.title }}</h3>
-                <p>{{ m.overview|truncate(150, true) }}</p>
-              </div>
-            </a>
-            {% endfor %}
-          </div>
-          <div class="carousel-indicators" id="recently-added-carousel-indicators">
-            {% for m in recently_added %}
-              <span class="indicator-dot" data-slide-index="{{ loop.index0 }}"></span>
-            {% endfor %}
-          </div>
-        </div>
-      {% else %}
-        <div class="category-header">
-          <h2>Recently Added</h2>
-          <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
-        </div>
+      {# NEW: Recently Added Section #}
+      <div class="category-header">
+        <h2>Recently Added</h2>
+        <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
+      </div>
+      {% if recently_added|length == 0 %}
         <p style="text-align:center; color:#999;">No recently added content found.</p>
+      {% else %}
+        <div class="grid"> {# Homepage recently added grid #}
+          {% for m in recently_added %}
+          <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+            {% if m.poster %}
+              <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
+            {% else %}
+              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
+                No Image
+              </div>
+            {% endif %}
+      
+            <div class="overlay-text">
+                {% if m.is_coming_soon %}
+                    <span class="label-badge coming-soon-badge">COMING SOON</span>
+                {% elif m.top_label %}
+                    <span class="label-badge custom-label">{{ m.top_label | upper }}</span>
+                {% elif m.original_language and m.original_language != 'N/A' %}
+                    <span class="label-badge">{{ m.original_language | upper }}</span>
+                {% endif %}
+                <span class="movie-top-title" title="{{ m.title }}">{{ m.title }}</span>
+            </div>
+      
+            {% if m.quality %}
+              <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
+            {% endif %}
+            <div class="movie-info">
+              <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
+              <div class="movie-year">{{ m.year }}</div>
+            </div>
+          </a>
+          {% endfor %}
+        </div>
       {% endif %}
 
       <div class="category-header">
@@ -836,92 +827,10 @@ index_html = """
     <span>Search</span>
   </a>
 </nav>
-
-<script>
-  // General Carousel JavaScript Function
-  function initializeCarousel(wrapperId, indicatorsId) {
-    const carouselWrapper = document.getElementById(wrapperId);
-    const indicatorDotsContainer = document.getElementById(indicatorsId);
-
-    if (!carouselWrapper || !indicatorDotsContainer) {
-      console.warn(`Carousel elements with IDs ${wrapperId} and ${indicatorsId} not found. Skipping initialization.`);
-      return;
-    }
-
-    const slides = carouselWrapper.querySelectorAll('.carousel-slide');
-    if (slides.length === 0) {
-      console.log(`No slides found for carousel with ID ${wrapperId}.`);
-      return;
-    }
-
-    const numSlides = slides.length;
-    let currentIndex = 0;
-    let autoScrollInterval;
-    const scrollIntervalTime = 5000; // 5 seconds
-
-    function updateCarousel() {
-      const offset = -currentIndex * 100;
-      carouselWrapper.style.transform = `translateX(${offset}%)`;
-      updateIndicators();
-    }
-
-    function updateIndicators() {
-      const dots = indicatorDotsContainer.querySelectorAll('.indicator-dot');
-      dots.forEach((dot, index) => {
-        if (index === currentIndex) {
-          dot.classList.add('active');
-        } else {
-          dot.classList.remove('active');
-        }
-      });
-    }
-
-    function goToSlide(index) {
-      currentIndex = index;
-      updateCarousel();
-      resetAutoScroll();
-    }
-
-    function nextSlide() {
-      currentIndex = (currentIndex + 1) % numSlides;
-      updateCarousel();
-    }
-
-    function startAutoScroll() {
-      autoScrollInterval = setInterval(nextSlide, scrollIntervalTime);
-    }
-
-    function resetAutoScroll() {
-      clearInterval(autoScrollInterval);
-      startAutoScroll();
-    }
-
-    // Initialize indicators
-    indicatorDotsContainer.addEventListener('click', function(event) {
-      if (event.target.classList.contains('indicator-dot')) {
-        const slideIndex = parseInt(event.target.dataset.slideIndex);
-        goToSlide(slideIndex);
-      }
-    });
-
-    // Start auto-scrolling
-    updateCarousel(); // Set initial slide and indicator
-    startAutoScroll();
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Trending Carousel
-    initializeCarousel('trending-carousel-wrapper', 'trending-carousel-indicators');
-
-    // Initialize Recently Added Carousel
-    initializeCarousel('recently-added-carousel-wrapper', 'recently-added-carousel-indicators');
-  });
-</script>
 </body>
 </html>
 """
 # --- END OF index_html TEMPLATE ---
-
 
 # --- START OF detail_html TEMPLATE --- (কোন পরিবর্তন নেই)
 detail_html = """
@@ -1302,8 +1211,7 @@ detail_html = """
 """
 # --- END OF detail_html TEMPLATE ---
 
-
-# --- START OF admin_html TEMPLATE --- (সার্চ ফর্ম সহ নতুন কোড)
+# --- START OF admin_html TEMPLATE --- (কোন পরিবর্তন নেই)
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -1508,11 +1416,6 @@ admin_html = """
     </div>
 
     <div class="form-group">
-        <label for="backdrop_url">Backdrop URL (Optional - direct image link for carousel/background):</label>
-        <input type="url" name="backdrop_url" id="backdrop_url" placeholder="e.g., https://example.com/backdrop.jpg" />
-    </div>
-
-    <div class="form-group">
         <label for="year">Release Year (Optional - used if TMDb info not found):</label>
         <input type="text" name="year" id="year" placeholder="e.g., 2023" />
     </div>
@@ -1655,7 +1558,6 @@ admin_html = """
 </html>
 """
 # --- END OF admin_html TEMPLATE ---
-
 
 # --- START OF edit_html TEMPLATE --- (কোন পরিবর্তন নেই)
 edit_html = """
@@ -1844,11 +1746,6 @@ edit_html = """
     </div>
 
     <div class="form-group">
-        <label for="backdrop_url">Backdrop URL (Optional - direct image link for carousel/background):</label>
-        <input type="url" name="backdrop_url" id="backdrop_url" placeholder="e.g., https://example.com/backdrop.jpg" value="{{ movie.backdrop if movie.backdrop else '' }}" />
-    </div>
-
-    <div class="form-group">
         <label for="year">Release Year (Optional - used if TMDb info not found):</label>
         <input type="text" name="year" id="year" placeholder="e.g., 2023" value="{{ movie.year }}" />
     </div>
@@ -1948,7 +1845,6 @@ edit_html = """
 """
 # --- END OF edit_html TEMPLATE ---
 
-
 @app.route('/')
 def home():
     query = request.args.get('q')
@@ -1958,22 +1854,20 @@ def home():
     latest_movies_list = []
     latest_series_list = []
     coming_soon_movies_list = []
-    recently_added_list = [] # NEW: Added for Recently Added section
+    recently_added_list = []
+    cinematic_thumbnails = []  # NEW: Cinematic thumbnails list
 
     is_full_page_list = False
 
     if query:
-        # Search functionality remains the same
         result = movies.find({"title": {"$regex": query, "$options": "i"}})
         movies_list = list(result)
-        is_full_page_list = True # Search results should also be vertical
+        is_full_page_list = True
     else:
-        # Fetch data for each category on the homepage with a limit of 12
-        # Trending (quality == 'TRENDING')
+        # Existing sections
         trending_movies_result = movies.find({"quality": "TRENDING"}).sort('_id', -1).limit(12)
         trending_movies_list = list(trending_movies_result)
 
-        # Latest Movies (type == 'movie', not trending, not coming soon)
         latest_movies_result = movies.find({
             "type": "movie",
             "quality": {"$ne": "TRENDING"},
@@ -1981,7 +1875,6 @@ def home():
         }).sort('_id', -1).limit(12)
         latest_movies_list = list(latest_movies_result)
 
-        # Latest Web Series (type == 'series', not trending, not coming soon)
         latest_series_result = movies.find({
             "type": "series",
             "quality": {"$ne": "TRENDING"},
@@ -1989,30 +1882,62 @@ def home():
         }).sort('_id', -1).limit(12)
         latest_series_list = list(latest_series_result)
 
-        # NEW: Recently Added - All types of content, limited to 12
-        recently_added_result = movies.find().sort('_id', -1).limit(12)
-        recently_added_list = list(recently_added_result)
-
-        # Coming Soon (is_coming_soon == True)
         coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
         coming_soon_movies_list = list(coming_soon_result)
 
+        recently_added_result = movies.find().sort('_id', -1).limit(12)
+        recently_added_list = list(recently_added_result)
 
-    # Convert ObjectIds to strings for all fetched lists
-    # UPDATED: Included recently_added_list in the conversion
-    for m in movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list:
+        # NEW: Fetch cinematic thumbnails (last 10 items)
+        recently_added_for_thumbs = list(movies.find().sort('_id', -1).limit(10))
+        
+        if TMDB_API_KEY:
+            for movie in recently_added_for_thumbs:
+                thumb_data = {
+                    "title": movie["title"],
+                    "backdrop": None,
+                    "movie_id": str(movie["_id"])
+                }
+                
+                try:
+                    if movie.get("tmdb_id"):
+                        tmdb_url = f"https://api.themoviedb.org/3/movie/{movie['tmdb_id']}?api_key={TMDB_API_KEY}"
+                        res = requests.get(tmdb_url, timeout=3).json()
+                        if res and res.get("backdrop_path"):
+                            thumb_data["backdrop"] = f"https://image.tmdb.org/t/p/w780{res['backdrop_path']}"
+                    else:
+                        search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie['title']}"
+                        search_res = requests.get(search_url, timeout=3).json()
+                        if search_res and search_res.get("results") and search_res["results"]:
+                            backdrop_path = search_res["results"][0].get("backdrop_path")
+                            if backdrop_path:
+                                thumb_data["backdrop"] = f"https://image.tmdb.org/t/p/w780{backdrop_path}"
+                                movies.update_one(
+                                    {"_id": movie["_id"]},
+                                    {"$set": {"tmdb_id": search_res["results"][0].get("id")}}
+                                )
+                except Exception as e:
+                    print(f"Error fetching TMDb backdrop for {movie['title']}: {e}")
+                
+                cinematic_thumbnails.append(thumb_data)
+
+    # Convert ObjectIds to strings for all lists
+    for m in (movies_list + trending_movies_list + latest_movies_list + 
+              latest_series_list + coming_soon_movies_list + 
+              recently_added_list):
         m['_id'] = str(m['_id']) 
 
     return render_template_string(
         index_html, 
-        movies=movies_list, # Only used for search results or full page lists
+        movies=movies_list,
         query=query,
         trending_movies=trending_movies_list,
         latest_movies=latest_movies_list,
         latest_series=latest_series_list,
         coming_soon_movies=coming_soon_movies_list,
-        recently_added=recently_added_list, # NEW: Pass the new list to template
-        is_full_page_list=is_full_page_list # Pass this flag to the template
+        recently_added=recently_added_list,
+        cinematic_thumbnails=cinematic_thumbnails,  # NEW: Pass to template
+        is_full_page_list=is_full_page_list
     )
 
 @app.route('/movie/<movie_id>')
@@ -2022,28 +1947,22 @@ def movie_detail(movie_id):
         if movie:
             movie['_id'] = str(movie['_id'])
             
-            # Fetch additional details from TMDb if API key is available
-            # Only fetch if tmdb_id is not already present or if the existing poster/overview are default values.
-            # AND if it's a movie (TMDb episode details are more complex)
-            should_fetch_tmdb = TMDB_API_KEY and (not movie.get("tmdb_id") or movie.get("overview") == "No overview available." or not movie.get("poster") or not movie.get("backdrop")) and movie.get("type") == "movie" # MODIFIED: Added backdrop check
+            should_fetch_tmdb = TMDB_API_KEY and (not movie.get("tmdb_id") or movie.get("overview") == "No overview available." or not movie.get("poster")) and movie.get("type") == "movie"
 
             if should_fetch_tmdb:
                 tmdb_id = movie.get("tmdb_id") 
                 
-                # If TMDb ID is not stored, search by title first
                 if not tmdb_id:
-                    # Decide whether to search as movie or tv based on 'type' field
-                    tmdb_search_type = "movie" if movie.get("type") == "movie" else "tv" # Will only be 'movie' due to should_fetch_tmdb
+                    tmdb_search_type = "movie" if movie.get("type") == "movie" else "tv"
                     search_url = f"https://api.themoviedb.org/3/search/{tmdb_search_type}?api_key={TMDB_API_KEY}&query={movie['title']}"
                     try:
                         search_res = requests.get(search_url, timeout=5).json()
                         if search_res and "results" in search_res and search_res["results"]:
                             tmdb_id = search_res["results"][0].get("id")
-                            # Update the movie in DB with tmdb_id for future faster access
                             movies.update_one({"_id": ObjectId(movie_id)}, {"$set": {"tmdb_id": tmdb_id}})
                         else:
                             print(f"No search results found on TMDb for title: {movie['title']} ({tmdb_search_type})")
-                            tmdb_id = None # Ensure tmdb_id is None if no search results
+                            tmdb_id = None
                     except requests.exceptions.RequestException as e:
                         print(f"Error connecting to TMDb API for search '{movie['title']}': {e}")
                         tmdb_id = None
@@ -2051,23 +1970,18 @@ def movie_detail(movie_id):
                         print(f"An unexpected error occurred during TMDb search: {e}")
                         tmdb_id = None
 
-                # If TMDb ID is found (either from DB or search), fetch full details
                 if tmdb_id:
-                    tmdb_detail_type = "movie" # Always movie if should_fetch_tmdb is true
+                    tmdb_detail_type = "movie"
                     tmdb_detail_url = f"https://api.themoviedb.org/3/{tmdb_detail_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
                     try:
                         res = requests.get(tmdb_detail_url, timeout=5).json()
                         if res:
-                            # Only update if TMDb provides a better value AND manual data wasn't provided
                             if movie.get("overview") == "No overview available." and res.get("overview"):
                                 movie["overview"] = res.get("overview")
                             if not movie.get("poster") and res.get("poster_path"):
                                 movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
-                            # NEW: Update backdrop
-                            if not movie.get("backdrop") and res.get("backdrop_path"):
-                                movie["backdrop"] = f"https://image.tmdb.org/t/p/w1280{res['backdrop_path']}"
                             
-                            release_date = res.get("release_date") # For movies
+                            release_date = res.get("release_date")
                             if movie.get("year") == "N/A" and release_date:
                                 movie["year"] = release_date[:4]
                                 movie["release_date"] = release_date
@@ -2081,14 +1995,12 @@ def movie_detail(movie_id):
                             for genre_obj in res.get("genres", []):
                                 if isinstance(genre_obj, dict) and genre_obj.get("id") in TMDb_Genre_Map:
                                     genres_names.append(TMDb_Genre_Map[genre_obj["id"]])
-                            if (not movie.get("genres") or movie["genres"] == []) and genres_names: # Only update if TMDb provides genres and no manual genres
+                            if (not movie.get("genres") or movie["genres"] == []) and genres_names:
                                 movie["genres"] = genres_names
 
-                            # Persist TMDb fetched data to DB
                             movies.update_one({"_id": ObjectId(movie_id)}, {"$set": {
                                 "overview": movie["overview"],
                                 "poster": movie["poster"],
-                                "backdrop": movie["backdrop"], # NEW: Persist backdrop
                                 "year": movie["year"],
                                 "release_date": movie["release_date"],
                                 "vote_average": movie["vote_average"],
@@ -2110,38 +2022,33 @@ def movie_detail(movie_id):
         return render_template_string(detail_html, movie=None)
 
 @app.route('/admin', methods=["GET", "POST"])
-@requires_auth # অথেন্টিকেশন ডেকোরেটর যোগ করা হয়েছে
+@requires_auth
 def admin():
     if request.method == "POST":
         title = request.form.get("title")
-        content_type = request.form.get("content_type", "movie") # New: 'movie' or 'series'
+        content_type = request.form.get("content_type", "movie")
         quality_tag = request.form.get("quality", "").upper()
         
-        # Get manual inputs
         manual_overview = request.form.get("overview")
         manual_poster_url = request.form.get("poster_url")
-        manual_backdrop_url = request.form.get("backdrop_url") # NEW: Get manual backdrop URL
         manual_year = request.form.get("year")
         manual_original_language = request.form.get("original_language")
         manual_genres_str = request.form.get("genres")
-        manual_top_label = request.form.get("top_label") # Get custom top label
-        is_trending = request.form.get("is_trending") == "true" # New: Checkbox for trending
-        is_coming_soon = request.form.get("is_coming_soon") == "true" # New: Checkbox for coming soon
+        manual_top_label = request.form.get("top_label")
+        is_trending = request.form.get("is_trending") == "true"
+        is_coming_soon = request.form.get("is_coming_soon") == "true"
 
-        # Process manual genres (comma-separated string to list)
         manual_genres_list = [g.strip() for g in manual_genres_str.split(',') if g.strip()] if manual_genres_str else []
 
-        # If is_trending is true, force quality to 'TRENDING'
         if is_trending:
             quality_tag = "TRENDING"
 
         movie_data = {
             "title": title,
             "quality": quality_tag,
-            "type": content_type, # Use selected content type
+            "type": content_type,
             "overview": manual_overview if manual_overview else "No overview available.",
             "poster": manual_poster_url if manual_poster_url else "",
-            "backdrop": manual_backdrop_url if manual_backdrop_url else "", # NEW: Store manual backdrop
             "year": manual_year if manual_year else "N/A",
             "release_date": manual_year if manual_year else "N/A", 
             "vote_average": None,
@@ -2149,10 +2056,9 @@ def admin():
             "genres": manual_genres_list,
             "tmdb_id": None,
             "top_label": manual_top_label if manual_top_label else "",
-            "is_coming_soon": is_coming_soon # Store coming soon status
+            "is_coming_soon": is_coming_soon
         }
 
-        # Handle download links based on content type
         if content_type == "movie":
             links_list = []
             link_480p = request.form.get("link_480p")
@@ -2165,7 +2071,7 @@ def admin():
             if link_1080p:
                 links_list.append({"quality": "1080p", "size": "2.9GB", "url": link_1080p})
             movie_data["links"] = links_list
-        else: # content_type == "series"
+        else:
             episodes_list = []
             episode_numbers = request.form.getlist('episode_number[]')
             episode_titles = request.form.getlist('episode_title[]')
@@ -2191,22 +2097,16 @@ def admin():
                 })
             movie_data["episodes"] = episodes_list
 
-        # Try to fetch from TMDb only if no manual poster, backdrop, or overview was provided
-        # And if it's a movie, TMDb series episode fetching is more complex and not implemented here
-        if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_backdrop_url and not manual_overview or movie_data["overview"] == "No overview available." or not movie_data["poster"] or not movie_data["backdrop"]): # MODIFIED
+        if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_overview or movie_data["overview"] == "No overview available." or not movie_data["poster"]):
             tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
             try:
                 res = requests.get(tmdb_url, timeout=5).json()
                 if res and "results" in res and res["results"]:
                     data = res["results"][0]
-                    # Overwrite only if TMDb provides a value and manual data wasn't explicitly provided
                     if not manual_overview and data.get("overview"):
                         movie_data["overview"] = data.get("overview")
                     if not manual_poster_url and data.get("poster_path"):
                         movie_data["poster"] = f"https://image.tmdb.org/t/p/w500{data['poster_path']}"
-                    # NEW: Fetch backdrop path
-                    if not manual_backdrop_url and data.get("backdrop_path"):
-                        movie_data["backdrop"] = f"https://image.tmdb.org/t/p/w1280{data['backdrop_path']}" # Using w1280 for higher resolution backdrops
                     
                     release_date = data.get("release_date")
                     if not manual_year and release_date:
@@ -2221,7 +2121,7 @@ def admin():
                     for genre_id in data.get("genre_ids", []):
                         if genre_id in TMDb_Genre_Map:
                             genres_names.append(TMDb_Genre_Map[genre_id])
-                    if not manual_genres_list and genres_names: # Only update genres if TMDb provides them AND no manual genres
+                    if not manual_genres_list and genres_names:
                         movie_data["genres"] = genres_names
                     
                     movie_data["tmdb_id"] = data.get("id")
@@ -2237,30 +2137,25 @@ def admin():
         try:
             movies.insert_one(movie_data)
             print(f"Content '{movie_data['title']}' added successfully to MovieZone!")
-            return redirect(url_for('admin')) # Redirect to admin after POST
+            return redirect(url_for('admin'))
         except Exception as e:
             print(f"Error inserting content into MongoDB: {e}")
             return redirect(url_for('admin'))
 
-    # --- GET request handling (Modified for search) ---
-    admin_query = request.args.get('q') # Get the search query from URL
+    admin_query = request.args.get('q')
 
     if admin_query:
-        # Search content by title (case-insensitive regex)
         all_content = list(movies.find({"title": {"$regex": admin_query, "$options": "i"}}).sort('_id', -1))
     else:
-        # If no search query, fetch all content (as before)
         all_content = list(movies.find().sort('_id', -1))
     
-    # Convert ObjectIds to string for template
     for content in all_content:
         content['_id'] = str(content['_id']) 
 
     return render_template_string(admin_html, movies=all_content, admin_query=admin_query)
 
-
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
-@requires_auth # অথেন্টিকেশন ডেকোরেটর যোগ করা হয়েছে
+@requires_auth
 def edit_movie(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
@@ -2268,14 +2163,12 @@ def edit_movie(movie_id):
             return "Movie not found!", 404
 
         if request.method == "POST":
-            # Extract updated data from form
             title = request.form.get("title")
             content_type = request.form.get("content_type", "movie")
             quality_tag = request.form.get("quality", "").upper()
             
             manual_overview = request.form.get("overview")
             manual_poster_url = request.form.get("poster_url")
-            manual_backdrop_url = request.form.get("backdrop_url") # NEW: Get manual backdrop URL
             manual_year = request.form.get("year")
             manual_original_language = request.form.get("original_language")
             manual_genres_str = request.form.get("genres")
@@ -2288,23 +2181,20 @@ def edit_movie(movie_id):
             if is_trending:
                 quality_tag = "TRENDING"
             
-            # Prepare updated data for MongoDB
             updated_data = {
                 "title": title,
                 "quality": quality_tag,
                 "type": content_type,
                 "overview": manual_overview if manual_overview else "No overview available.",
                 "poster": manual_poster_url if manual_poster_url else "",
-                "backdrop": manual_backdrop_url if manual_backdrop_url else "", # NEW: Store manual backdrop
                 "year": manual_year if manual_year else "N/A",
-                "release_date": manual_year if manual_year else "N/A", # Assuming release_date is same as year if manually entered
+                "release_date": manual_year if manual_year else "N/A",
                 "original_language": manual_original_language if manual_original_language else "N/A",
                 "genres": manual_genres_list,
                 "top_label": manual_top_label if manual_top_label else "",
                 "is_coming_soon": is_coming_soon
             }
 
-            # Handle download links based on content type
             if content_type == "movie":
                 links_list = []
                 link_480p = request.form.get("link_480p")
@@ -2317,10 +2207,9 @@ def edit_movie(movie_id):
                 if link_1080p:
                     links_list.append({"quality": "1080p", "size": "2.9GB", "url": link_1080p})
                 updated_data["links"] = links_list
-                # Remove episodes if present for a movie
                 if "episodes" in movie:
                     movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
-            else: # content_type == "series"
+            else:
                 episodes_list = []
                 episode_numbers = request.form.getlist('episode_number[]')
                 episode_titles = request.form.getlist('episode_title[]')
@@ -2345,34 +2234,26 @@ def edit_movie(movie_id):
                         "links": episode_links
                     })
                 updated_data["episodes"] = episodes_list
-                # Remove top-level 'links' if present for series
                 if "links" in movie:
                     movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": ""}})
 
-
-            # If TMDb API Key is available and no manual overview/poster provided, fetch and update
-            # Only for movies, as TMDb episode details are more complex
-            if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_backdrop_url and not manual_overview): # MODIFIED
+            if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_overview):
                 tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
                 try:
                     res = requests.get(tmdb_url, timeout=5).json()
                     if res and "results" in res and res["results"]:
                         data = res["results"][0]
-                        # Only update if TMDb provides a value and manual data wasn't explicitly provided
                         if not manual_overview and data.get("overview"):
                             updated_data["overview"] = data.get("overview")
                         if not manual_poster_url and data.get("poster_path"):
                             updated_data["poster"] = f"https://image.tmdb.org/t/p/w500{data['poster_path']}"
-                        # NEW: Fetch backdrop path
-                        if not manual_backdrop_url and data.get("backdrop_path"):
-                            updated_data["backdrop"] = f"https://image.tmdb.org/t/p/w1280{data['backdrop_path']}"
                         
                         release_date = data.get("release_date")
                         if not manual_year and release_date:
                             updated_data["year"] = release_date[:4]
                             updated_data["release_date"] = release_date
                         
-                        updated_data["vote_average"] = data.get("vote_average", movie.get("vote_average")) # Keep old if TMDb doesn't provide
+                        updated_data["vote_average"] = data.get("vote_average", movie.get("vote_average"))
                         if not manual_original_language and data.get("original_language"):
                             updated_data["original_language"] = data.get("original_language")
                         
@@ -2393,13 +2274,11 @@ def edit_movie(movie_id):
             else:
                 print("Skipping TMDb API call (not a movie, no key, or manual poster/overview provided).")
             
-            # Update the movie in MongoDB
             movies.update_one({"_id": ObjectId(movie_id)}, {"$set": updated_data})
             print(f"Content '{title}' updated successfully!")
-            return redirect(url_for('admin')) # Redirect back to admin list after update
+            return redirect(url_for('admin'))
 
-        else: # GET request, display the form
-            # Convert ObjectId to string for template
+        else:
             movie['_id'] = str(movie['_id']) 
             return render_template_string(edit_html, movie=movie)
 
@@ -2407,12 +2286,10 @@ def edit_movie(movie_id):
         print(f"Error processing edit for movie ID {movie_id}: {e}")
         return "An error occurred during editing.", 500
 
-
 @app.route('/delete_movie/<movie_id>')
-@requires_auth # অথেন্টিকেশন ডেকোরেটর যোগ করা হয়েছে
+@requires_auth
 def delete_movie(movie_id):
     try:
-        # Delete the movie from MongoDB using its ObjectId
         result = movies.delete_one({"_id": ObjectId(movie_id)})
         if result.deleted_count == 1:
             print(f"Content with ID {movie_id} deleted successfully from MovieZone!")
@@ -2421,8 +2298,7 @@ def delete_movie(movie_id):
     except Exception as e:
         print(f"Error deleting content with ID {movie_id}: {e}")
     
-    return redirect(url_for('admin')) # Redirect back to the admin page
-
+    return redirect(url_for('admin'))
 
 # New routes for navigation bar and specific categories
 @app.route('/trending_movies')
@@ -2430,7 +2306,6 @@ def trending_movies():
     trending_list = list(movies.find({"quality": "TRENDING"}).sort('_id', -1))
     for m in trending_list:
         m['_id'] = str(m['_id'])
-    # Pass is_full_page_list=True and use 'movies' for the list
     return render_template_string(index_html, movies=trending_list, query="Trending on MovieZone", is_full_page_list=True)
 
 @app.route('/movies_only')
@@ -2438,7 +2313,6 @@ def movies_only():
     movie_list = list(movies.find({"type": "movie", "quality": {"$ne": "TRENDING"}, "is_coming_soon": {"$ne": True}}).sort('_id', -1))
     for m in movie_list:
         m['_id'] = str(m['_id'])
-    # Pass is_full_page_list=True and use 'movies' for the list
     return render_template_string(index_html, movies=movie_list, query="All Movies on MovieZone", is_full_page_list=True)
 
 @app.route('/webseries')
@@ -2446,7 +2320,6 @@ def webseries():
     series_list = list(movies.find({"type": "series", "quality": {"$ne": "TRENDING"}, "is_coming_soon": {"$ne": True}}).sort('_id', -1))
     for m in series_list:
         m['_id'] = str(m['_id'])
-    # Pass is_full_page_list=True and use 'movies' for the list
     return render_template_string(index_html, movies=series_list, query="All Web Series on MovieZone", is_full_page_list=True)
 
 @app.route('/coming_soon')
@@ -2454,7 +2327,6 @@ def coming_soon():
     coming_soon_list = list(movies.find({"is_coming_soon": True}).sort('_id', -1))
     for m in coming_soon_list:
         m['_id'] = str(m['_id'])
-    # Pass is_full_page_list=True and use 'movies' for the list
     return render_template_string(index_html, movies=coming_soon_list, query="Coming Soon to MovieZone", is_full_page_list=True)
 
 # NEW: Route for "Recently Added" full list
@@ -2464,7 +2336,6 @@ def recently_added_all():
     for m in all_recent_content:
         m['_id'] = str(m['_id'])
     return render_template_string(index_html, movies=all_recent_content, query="Recently Added to MovieZone", is_full_page_list=True)
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
