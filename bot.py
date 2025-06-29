@@ -175,6 +175,79 @@ index_html = """
       color: #1db954;
   }
 
+  /* New: Carousel for Auto-scrolling Thumbnails */
+  .carousel-container {
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+    background: #181818;
+  }
+  .carousel-wrapper {
+    display: flex;
+    transition: transform 0.8s ease-in-out; /* Smooth transition */
+  }
+  .carousel-slide {
+    min-width: 100%; /* Each slide takes full width of container */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    flex-shrink: 0; /* Prevent shrinking */
+  }
+  .carousel-slide img {
+    width: 100%;
+    height: 400px; /* Fixed height for carousel images */
+    object-fit: cover;
+    display: block;
+    border-radius: 8px;
+  }
+  .carousel-title-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); /* Gradient overlay */
+    color: #fff;
+    padding: 20px;
+    text-align: left;
+  }
+  .carousel-title-overlay h3 {
+    font-size: 28px;
+    margin-bottom: 5px;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+  }
+  .carousel-title-overlay p {
+    font-size: 16px;
+    color: #ccc;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .carousel-indicators {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+  }
+  .indicator-dot {
+    width: 10px;
+    height: 10px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  .indicator-dot.active {
+    background-color: #e44d26; /* Orange for active dot */
+  }
 
   /* Movie Grid and Card Styles */
   .grid {
@@ -335,6 +408,20 @@ index_html = """
     form { margin-left: 10px; }
     input[type="search"] { max-width: unset; font-size: 14px; padding: 6px 10px; }
     main { margin: 15px auto; padding: 0 10px; padding-bottom: 60px; }
+
+    /* Carousel Mobile Adjustments */
+    .carousel-slide img {
+        height: 250px; /* Shorter height on mobile */
+    }
+    .carousel-title-overlay {
+        padding: 10px;
+    }
+    .carousel-title-overlay h3 {
+        font-size: 22px;
+    }
+    .carousel-title-overlay p {
+        font-size: 14px;
+    }
     
     .category-header { margin-bottom: 15px; padding: 8px 0; }
     .category-header h2 { font-size: 18px; }
@@ -383,6 +470,15 @@ index_html = """
           gap: 10px;
       }
       .movie-poster { height: 200px; } /* Adjust height for very small screens */
+      .carousel-slide img {
+          height: 200px;
+      }
+      .carousel-title-overlay h3 {
+          font-size: 18px;
+      }
+      .carousel-title-overlay p {
+          font-size: 12px;
+      }
   }
   /* Mobile adjustments - END */
 
@@ -425,6 +521,34 @@ index_html = """
   </form>
 </header>
 <main>
+  {# NEW: Automatic Scrolling Carousel for Trending Movies #}
+  {% if not query and trending_movies|length > 0 %}
+    <div class="carousel-container">
+      <div class="carousel-wrapper">
+        {% for m in trending_movies %}
+        <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
+          {% if m.poster %}
+            <img src="{{ m.poster }}" alt="{{ m.title }}">
+          {% else %}
+            <div style="width:100%; height:400px; background:#333; display:flex;align-items:center;justify-content:center;color:#777; font-size:24px;">
+              No Image
+            </div>
+          {% endif %}
+          <div class="carousel-title-overlay">
+            <h3>{{ m.title }}</h3>
+            <p>{{ m.overview|truncate(150, true) }}</p> {# Truncate overview for carousel #}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      <div class="carousel-indicators">
+        {% for m in trending_movies %}
+          <span class="indicator-dot" data-slide-index="{{ loop.index0 }}"></span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
   {# Conditional rendering for full list pages vs. homepage sections #}
   {% if is_full_page_list %}
     <div class="category-header">
@@ -632,7 +756,7 @@ index_html = """
         </div>
       {% endif %}
 
-      {# NEW: Recently Added Section #}
+      {# UPDATED: Recently Added Section moved below Latest TV Series #}
       <div class="category-header">
         <h2>Recently Added</h2>
         <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
@@ -733,6 +857,79 @@ index_html = """
     <span>Search</span>
   </a>
 </nav>
+
+<script>
+  // Carousel JavaScript
+  document.addEventListener('DOMContentLoaded', function() {
+    const carouselWrapper = document.querySelector('.carousel-wrapper');
+    const indicatorDotsContainer = document.querySelector('.carousel-indicators');
+    if (!carouselWrapper || !indicatorDotsContainer) {
+      console.warn("Carousel elements not found. Skipping carousel initialization.");
+      return;
+    }
+
+    const slides = document.querySelectorAll('.carousel-slide');
+    if (slides.length === 0) {
+      console.log("No slides found for the carousel. Hiding carousel container.");
+      document.querySelector('.carousel-container').style.display = 'none';
+      return;
+    }
+
+    const numSlides = slides.length;
+    let currentIndex = 0;
+    let autoScrollInterval;
+    const scrollIntervalTime = 5000; // 5 seconds
+
+    function updateCarousel() {
+      const offset = -currentIndex * 100;
+      carouselWrapper.style.transform = `translateX(${offset}%)`;
+      updateIndicators();
+    }
+
+    function updateIndicators() {
+      const dots = document.querySelectorAll('.indicator-dot');
+      dots.forEach((dot, index) => {
+        if (index === currentIndex) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    }
+
+    function goToSlide(index) {
+      currentIndex = index;
+      updateCarousel();
+      resetAutoScroll();
+    }
+
+    function nextSlide() {
+      currentIndex = (currentIndex + 1) % numSlides;
+      updateCarousel();
+    }
+
+    function startAutoScroll() {
+      autoScrollInterval = setInterval(nextSlide, scrollIntervalTime);
+    }
+
+    function resetAutoScroll() {
+      clearInterval(autoScrollInterval);
+      startAutoScroll();
+    }
+
+    // Initialize indicators
+    indicatorDotsContainer.addEventListener('click', function(event) {
+      if (event.target.classList.contains('indicator-dot')) {
+        const slideIndex = parseInt(event.target.dataset.slideIndex);
+        goToSlide(slideIndex);
+      }
+    });
+
+    // Start auto-scrolling
+    updateCarousel(); // Set initial slide and indicator
+    startAutoScroll();
+  });
+</script>
 </body>
 </html>
 """
@@ -1795,13 +1992,13 @@ def home():
         }).sort('_id', -1).limit(12)
         latest_series_list = list(latest_series_result)
 
-        # Coming Soon (is_coming_soon == True)
-        coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
-        coming_soon_movies_list = list(coming_soon_result)
-
         # NEW: Recently Added - All types of content, limited to 12
         recently_added_result = movies.find().sort('_id', -1).limit(12)
         recently_added_list = list(recently_added_result)
+
+        # Coming Soon (is_coming_soon == True)
+        coming_soon_result = movies.find({"is_coming_soon": True}).sort('_id', -1).limit(12)
+        coming_soon_movies_list = list(coming_soon_result)
 
 
     # Convert ObjectIds to strings for all fetched lists
