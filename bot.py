@@ -200,7 +200,7 @@ index_html = """
   .carousel-slide img {
     width: 100%;
     height: 400px; /* Fixed height for carousel images */
-    object-fit: cover;
+    object-fit: cover; /* Ensures the image covers the area */
     display: block;
     border-radius: 8px;
   }
@@ -521,15 +521,17 @@ index_html = """
   </form>
 </header>
 <main>
-  {# NEW: Automatic Scrolling Carousel for Trending Movies #}
+  {# NEW: Automatic Scrolling Carousel for Trending Movies - Now uses backdrop images #}
   {% if not query and trending_movies|length > 0 %}
     <div class="carousel-container">
       <div class="carousel-wrapper">
         {% for m in trending_movies %}
         <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
-          {% if m.poster %}
-            <img src="{{ m.poster }}" alt="{{ m.title }}">
-          {% else %}
+          {% if m.backdrop %} {# Use backdrop if available #}
+            <img src="{{ m.backdrop }}" alt="{{ m.title }}">
+          {% elif m.poster %} {# Fallback to poster if no backdrop #}
+            <img src="{{ m.poster }}" alt="{{ m.title }}" style="object-fit: contain; background-color: #333;"> {# Use contain to avoid cropping vertical posters #}
+          {% else %} {# Generic placeholder #}
             <div style="width:100%; height:400px; background:#333; display:flex;align-items:center;justify-content:center;color:#777; font-size:24px;">
               No Image
             </div>
@@ -1521,6 +1523,11 @@ admin_html = """
     </div>
 
     <div class="form-group">
+        <label for="backdrop_url">Backdrop URL (Optional - direct image link for carousel/background):</label>
+        <input type="url" name="backdrop_url" id="backdrop_url" placeholder="e.g., https://example.com/backdrop.jpg" />
+    </div>
+
+    <div class="form-group">
         <label for="year">Release Year (Optional - used if TMDb info not found):</label>
         <input type="text" name="year" id="year" placeholder="e.g., 2023" />
     </div>
@@ -1852,6 +1859,11 @@ edit_html = """
     </div>
 
     <div class="form-group">
+        <label for="backdrop_url">Backdrop URL (Optional - direct image link for carousel/background):</label>
+        <input type="url" name="backdrop_url" id="backdrop_url" placeholder="e.g., https://example.com/backdrop.jpg" value="{{ movie.backdrop if movie.backdrop else '' }}" />
+    </div>
+
+    <div class="form-group">
         <label for="year">Release Year (Optional - used if TMDb info not found):</label>
         <input type="text" name="year" id="year" placeholder="e.g., 2023" value="{{ movie.year }}" />
     </div>
@@ -2028,7 +2040,7 @@ def movie_detail(movie_id):
             # Fetch additional details from TMDb if API key is available
             # Only fetch if tmdb_id is not already present or if the existing poster/overview are default values.
             # AND if it's a movie (TMDb episode details are more complex)
-            should_fetch_tmdb = TMDB_API_KEY and (not movie.get("tmdb_id") or movie.get("overview") == "No overview available." or not movie.get("poster")) and movie.get("type") == "movie"
+            should_fetch_tmdb = TMDB_API_KEY and (not movie.get("tmdb_id") or movie.get("overview") == "No overview available." or not movie.get("poster") or not movie.get("backdrop")) and movie.get("type") == "movie" # MODIFIED: Added backdrop check
 
             if should_fetch_tmdb:
                 tmdb_id = movie.get("tmdb_id") 
@@ -2066,6 +2078,9 @@ def movie_detail(movie_id):
                                 movie["overview"] = res.get("overview")
                             if not movie.get("poster") and res.get("poster_path"):
                                 movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
+                            # NEW: Update backdrop
+                            if not movie.get("backdrop") and res.get("backdrop_path"):
+                                movie["backdrop"] = f"https://image.tmdb.org/t/p/w1280{res['backdrop_path']}"
                             
                             release_date = res.get("release_date") # For movies
                             if movie.get("year") == "N/A" and release_date:
@@ -2088,6 +2103,7 @@ def movie_detail(movie_id):
                             movies.update_one({"_id": ObjectId(movie_id)}, {"$set": {
                                 "overview": movie["overview"],
                                 "poster": movie["poster"],
+                                "backdrop": movie["backdrop"], # NEW: Persist backdrop
                                 "year": movie["year"],
                                 "release_date": movie["release_date"],
                                 "vote_average": movie["vote_average"],
@@ -2119,6 +2135,7 @@ def admin():
         # Get manual inputs
         manual_overview = request.form.get("overview")
         manual_poster_url = request.form.get("poster_url")
+        manual_backdrop_url = request.form.get("backdrop_url") # NEW: Get manual backdrop URL
         manual_year = request.form.get("year")
         manual_original_language = request.form.get("original_language")
         manual_genres_str = request.form.get("genres")
@@ -2139,6 +2156,7 @@ def admin():
             "type": content_type, # Use selected content type
             "overview": manual_overview if manual_overview else "No overview available.",
             "poster": manual_poster_url if manual_poster_url else "",
+            "backdrop": manual_backdrop_url if manual_backdrop_url else "", # NEW: Store manual backdrop
             "year": manual_year if manual_year else "N/A",
             "release_date": manual_year if manual_year else "N/A", 
             "vote_average": None,
@@ -2188,9 +2206,9 @@ def admin():
                 })
             movie_data["episodes"] = episodes_list
 
-        # Try to fetch from TMDb only if no manual poster or overview was provided
+        # Try to fetch from TMDb only if no manual poster, backdrop, or overview was provided
         # And if it's a movie, TMDb series episode fetching is more complex and not implemented here
-        if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_overview or movie_data["overview"] == "No overview available." or not movie_data["poster"]):
+        if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_backdrop_url and not manual_overview or movie_data["overview"] == "No overview available." or not movie_data["poster"] or not movie_data["backdrop"]): # MODIFIED
             tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
             try:
                 res = requests.get(tmdb_url, timeout=5).json()
@@ -2201,6 +2219,9 @@ def admin():
                         movie_data["overview"] = data.get("overview")
                     if not manual_poster_url and data.get("poster_path"):
                         movie_data["poster"] = f"https://image.tmdb.org/t/p/w500{data['poster_path']}"
+                    # NEW: Fetch backdrop path
+                    if not manual_backdrop_url and data.get("backdrop_path"):
+                        movie_data["backdrop"] = f"https://image.tmdb.org/t/p/w1280{data['backdrop_path']}" # Using w1280 for higher resolution backdrops
                     
                     release_date = data.get("release_date")
                     if not manual_year and release_date:
@@ -2269,6 +2290,7 @@ def edit_movie(movie_id):
             
             manual_overview = request.form.get("overview")
             manual_poster_url = request.form.get("poster_url")
+            manual_backdrop_url = request.form.get("backdrop_url") # NEW: Get manual backdrop URL
             manual_year = request.form.get("year")
             manual_original_language = request.form.get("original_language")
             manual_genres_str = request.form.get("genres")
@@ -2288,6 +2310,7 @@ def edit_movie(movie_id):
                 "type": content_type,
                 "overview": manual_overview if manual_overview else "No overview available.",
                 "poster": manual_poster_url if manual_poster_url else "",
+                "backdrop": manual_backdrop_url if manual_backdrop_url else "", # NEW: Store manual backdrop
                 "year": manual_year if manual_year else "N/A",
                 "release_date": manual_year if manual_year else "N/A", # Assuming release_date is same as year if manually entered
                 "original_language": manual_original_language if manual_original_language else "N/A",
@@ -2344,7 +2367,7 @@ def edit_movie(movie_id):
 
             # If TMDb API Key is available and no manual overview/poster provided, fetch and update
             # Only for movies, as TMDb episode details are more complex
-            if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_overview): # Only try to fetch if not manually overridden
+            if TMDB_API_KEY and content_type == "movie" and (not manual_poster_url and not manual_backdrop_url and not manual_overview): # MODIFIED
                 tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
                 try:
                     res = requests.get(tmdb_url, timeout=5).json()
@@ -2355,6 +2378,9 @@ def edit_movie(movie_id):
                             updated_data["overview"] = data.get("overview")
                         if not manual_poster_url and data.get("poster_path"):
                             updated_data["poster"] = f"https://image.tmdb.org/t/p/w500{data['poster_path']}"
+                        # NEW: Fetch backdrop path
+                        if not manual_backdrop_url and data.get("backdrop_path"):
+                            updated_data["backdrop"] = f"https://image.tmdb.org/t/p/w1280{data['backdrop_path']}"
                         
                         release_date = data.get("release_date")
                         if not manual_year and release_date:
@@ -2457,4 +2483,3 @@ def recently_added_all():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
-
