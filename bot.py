@@ -523,8 +523,12 @@ index_html = """
 <main>
   {# NEW: Automatic Scrolling Carousel for Trending Movies - Now uses backdrop images #}
   {% if not query and trending_movies|length > 0 %}
+    <div class="category-header">
+      <h2>Trending on MovieZone</h2>
+      <a href="{{ url_for('trending_movies') }}" class="see-all-btn">See All</a>
+    </div>
     <div class="carousel-container">
-      <div class="carousel-wrapper">
+      <div class="carousel-wrapper" id="trending-carousel-wrapper">
         {% for m in trending_movies %}
         <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
           {% if m.backdrop %} {# Use backdrop if available #}
@@ -543,7 +547,7 @@ index_html = """
         </a>
         {% endfor %}
       </div>
-      <div class="carousel-indicators">
+      <div class="carousel-indicators" id="trending-carousel-indicators">
         {% for m in trending_movies %}
           <span class="indicator-dot" data-slide-index="{{ loop.index0 }}"></span>
         {% endfor %}
@@ -635,46 +639,21 @@ index_html = """
         </div>
       {% endif %}
     {% else %}
-      <div class="category-header">
+      {# Existing Trending section is already a carousel #}
+      {# <div class="category-header">
         <h2>Trending on MovieZone</h2>
         <a href="{{ url_for('trending_movies') }}" class="see-all-btn">See All</a>
       </div>
       {% if trending_movies|length == 0 %}
         <p style="text-align:center; color:#999;">No trending movies found.</p>
       {% else %}
-        <div class="grid"> {# Homepage trending grid #}
+        <div class="grid"> 
           {% for m in trending_movies %}
-          <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-            {% if m.poster %}
-              <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
-            {% else %}
-              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
-                No Image
-              </div>
-            {% endif %}
-      
-            <div class="overlay-text">
-                {% if m.is_coming_soon %}
-                    <span class="label-badge coming-soon-badge">COMING SOON</span>
-                {% elif m.top_label %}
-                    <span class="label-badge custom-label">{{ m.top_label | upper }}</span>
-                {% elif m.original_language and m.original_language != 'N/A' %}
-                    <span class="label-badge">{{ m.original_language | upper }}</span>
-                {% endif %}
-                <span class="movie-top-title" title="{{ m.title }}">{{ m.title }}</span>
-            </div>
-      
-            {% if m.quality %}
-              <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
-            {% endif %}
-            <div class="movie-info">
-              <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
-              <div class="movie-year">{{ m.year }}</div>
-            </div>
-          </a>
-          {% endfor %}
+            {# ... trending movie card ... #}
+          {# {% endfor %}
         </div>
-      {% endif %}
+      {% endif %} #}
+
 
       <div class="category-header">
         <h2>Latest Movies</h2>
@@ -758,46 +737,44 @@ index_html = """
         </div>
       {% endif %}
 
-      {# UPDATED: Recently Added Section moved below Latest TV Series #}
-      <div class="category-header">
-        <h2>Recently Added</h2>
-        <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
-      </div>
-      {% if recently_added|length == 0 %}
-        <p style="text-align:center; color:#999;">No recently added content found.</p>
-      {% else %}
-        <div class="grid"> {# Homepage recently added grid #}
-          {% for m in recently_added %}
-          <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-            {% if m.poster %}
-              <img class="movie-poster" src="{{ m.poster }}" alt="{{ m.title }}">
-            {% else %}
-              <div style="height:300px; background:#333; display:flex;align-items:center;justify-content:center;color:#777;">
-                No Image
-              </div>
-            {% endif %}
-      
-            <div class="overlay-text">
-                {% if m.is_coming_soon %}
-                    <span class="label-badge coming-soon-badge">COMING SOON</span>
-                {% elif m.top_label %}
-                    <span class="label-badge custom-label">{{ m.top_label | upper }}</span>
-                {% elif m.original_language and m.original_language != 'N/A' %}
-                    <span class="label-badge">{{ m.original_language | upper }}</span>
-                {% endif %}
-                <span class="movie-top-title" title="{{ m.title }}">{{ m.title }}</span>
-            </div>
-      
-            {% if m.quality %}
-              <div class="badge {% if m.quality == 'TRENDING' %}trending{% endif %}">{{ m.quality }}</div>
-            {% endif %}
-            <div class="movie-info">
-              <h3 class="movie-title" title="{{ m.title }}">{{ m.title }}</h3>
-              <div class="movie-year">{{ m.year }}</div>
-            </div>
-          </a>
-          {% endfor %}
+      {# UPDATED: Recently Added Section moved below Latest TV Series - NOW AS CAROUSEL #}
+      {% if recently_added|length > 0 %}
+        <div class="category-header">
+          <h2>Recently Added</h2>
+          <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
         </div>
+        <div class="carousel-container">
+          <div class="carousel-wrapper" id="recently-added-carousel-wrapper">
+            {% for m in recently_added %}
+            <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="carousel-slide">
+              {% if m.backdrop %} {# Use backdrop if available #}
+                <img src="{{ m.backdrop }}" alt="{{ m.title }}">
+              {% elif m.poster %} {# Fallback to poster if no backdrop #}
+                <img src="{{ m.poster }}" alt="{{ m.title }}" style="object-fit: contain; background-color: #333;">
+              {% else %} {# Generic placeholder #}
+                <div style="width:100%; height:400px; background:#333; display:flex;align-items:center;justify-content:center;color:#777; font-size:24px;">
+                  No Image
+                </div>
+              {% endif %}
+              <div class="carousel-title-overlay">
+                <h3>{{ m.title }}</h3>
+                <p>{{ m.overview|truncate(150, true) }}</p>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+          <div class="carousel-indicators" id="recently-added-carousel-indicators">
+            {% for m in recently_added %}
+              <span class="indicator-dot" data-slide-index="{{ loop.index0 }}"></span>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="category-header">
+          <h2>Recently Added</h2>
+          <a href="{{ url_for('recently_added_all') }}" class="see-all-btn">See All</a>
+        </div>
+        <p style="text-align:center; color:#999;">No recently added content found.</p>
       {% endif %}
 
       <div class="category-header">
@@ -861,19 +838,19 @@ index_html = """
 </nav>
 
 <script>
-  // Carousel JavaScript
-  document.addEventListener('DOMContentLoaded', function() {
-    const carouselWrapper = document.querySelector('.carousel-wrapper');
-    const indicatorDotsContainer = document.querySelector('.carousel-indicators');
+  // General Carousel JavaScript Function
+  function initializeCarousel(wrapperId, indicatorsId) {
+    const carouselWrapper = document.getElementById(wrapperId);
+    const indicatorDotsContainer = document.getElementById(indicatorsId);
+
     if (!carouselWrapper || !indicatorDotsContainer) {
-      console.warn("Carousel elements not found. Skipping carousel initialization.");
+      console.warn(`Carousel elements with IDs ${wrapperId} and ${indicatorsId} not found. Skipping initialization.`);
       return;
     }
 
-    const slides = document.querySelectorAll('.carousel-slide');
+    const slides = carouselWrapper.querySelectorAll('.carousel-slide');
     if (slides.length === 0) {
-      console.log("No slides found for the carousel. Hiding carousel container.");
-      document.querySelector('.carousel-container').style.display = 'none';
+      console.log(`No slides found for carousel with ID ${wrapperId}.`);
       return;
     }
 
@@ -889,7 +866,7 @@ index_html = """
     }
 
     function updateIndicators() {
-      const dots = document.querySelectorAll('.indicator-dot');
+      const dots = indicatorDotsContainer.querySelectorAll('.indicator-dot');
       dots.forEach((dot, index) => {
         if (index === currentIndex) {
           dot.classList.add('active');
@@ -930,6 +907,14 @@ index_html = """
     // Start auto-scrolling
     updateCarousel(); // Set initial slide and indicator
     startAutoScroll();
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Trending Carousel
+    initializeCarousel('trending-carousel-wrapper', 'trending-carousel-indicators');
+
+    // Initialize Recently Added Carousel
+    initializeCarousel('recently-added-carousel-wrapper', 'recently-added-carousel-indicators');
   });
 </script>
 </body>
