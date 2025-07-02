@@ -1,14 +1,3 @@
-অবশ্যই! আমি আপনার অনুরোধটি বুঝতে পেরেছি। আপনি সম্পূর্ণ কোডটি একটিমাত্র ফাইলে দেখতে চাইছেন, যেখানে সমস্ত আপডেট এবং HTML টেমপ্লেট একত্রিত করা আছে।
-
-নিচে সেই সম্পূর্ণ এবং ফাইনাল কোডটি দেওয়া হলো। আপনি এই কোডটি একটি `.py` ফাইলে (যেমন: `app.py`) সেভ করে সরাসরি চালাতে পারবেন।
-
----
-
-### ফাইনাল কোড (Complete and Final Code)
-
-```python
-# moviezone_app.py
-
 from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
