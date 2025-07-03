@@ -66,7 +66,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
-# --- START OF index_html TEMPLATE (Final Mobile-First Polish) ---
+# --- START OF index_html TEMPLATE (Final Mobile-First Polish with all updates) ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -128,11 +128,12 @@ index_html = """
   }
   .hero-buttons .btn {
       padding: 10px 25px; margin-right: 1rem; border: none; border-radius: 4px;
-      font-size: 1rem; font-weight: 700; cursor: pointer; transition: opacity 0.3s ease;
+      font-size: 1rem; font-weight: 700; cursor: pointer; transition: opacity 0.3s ease, transform 0.15s ease;
   }
   .btn.btn-primary { background-color: var(--netflix-red); color: white; }
   .btn.btn-secondary { background-color: rgba(109, 109, 110, 0.7); color: white; }
   .btn:hover { opacity: 0.8; }
+  .btn:active { transform: scale(0.97); opacity: 0.7; } /* NEW: Tap feedback for buttons */
 
   main { padding-top: 0; }
   .carousel-row { margin: 40px 0; position: relative; }
@@ -168,9 +169,26 @@ index_html = """
   }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
 
-  /* Apply hover effect only on devices that can hover */
+  /* NEW: Skeleton Loader for posters for a better loading experience */
+  .skeleton-poster {
+      width: 100%; aspect-ratio: 2 / 3;
+      background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s infinite linear;
+      display: block;
+  }
+  @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+  }
+
   @media (hover: hover) {
     .movie-card:hover { transform: scale(1.05); z-index: 5; }
+  }
+  /* NEW: Tap feedback for movie cards on touch devices */
+  .movie-card:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease-in-out;
   }
 
   .full-page-grid-container { padding: 100px 50px 50px 50px; }
@@ -180,10 +198,9 @@ index_html = """
   }
   .full-page-grid .movie-card { min-width: 0; }
   
-  /* --- BOTTOM NAVIGATION BAR --- */
+  /* --- BOTTOM NAVIGATION BAR (IMPROVED) --- */
   .bottom-nav {
-      display: none; /* Hidden by default on desktop */
-      position: fixed; bottom: 0; left: 0; right: 0;
+      display: none; position: fixed; bottom: 0; left: 0; right: 0;
       height: var(--nav-height); background-color: #181818;
       border-top: 1px solid #282828;
       justify-content: space-around; align-items: center;
@@ -192,15 +209,22 @@ index_html = """
   .nav-item {
       display: flex; flex-direction: column; align-items: center;
       color: var(--text-dark); font-size: 10px; flex-grow: 1;
-      padding: 5px 0; transition: color 0.2s ease;
+      padding: 5px 0; transition: color 0.2s ease, font-weight 0.2s ease;
   }
-  .nav-item i { font-size: 20px; margin-bottom: 4px; }
-  .nav-item.active { color: var(--text-light); }
-  .nav-item.active .fa-home { color: var(--netflix-red); } /* Special color for home */
+  .nav-item i { font-size: 20px; margin-bottom: 4px; transition: transform 0.2s ease; }
+  /* IMPROVEMENT: Made active state more prominent */
+  .nav-item.active {
+      color: var(--text-light);
+      font-weight: 700;
+  }
+  .nav-item.active i {
+      transform: scale(1.1);
+  }
+  .nav-item.active .fa-home { color: var(--netflix-red); }
 
   /* --- MOBILE ENHANCEMENTS --- */
   @media (max-width: 768px) {
-      body { padding-bottom: var(--nav-height); } /* Ensure space for bottom nav */
+      body { padding-bottom: var(--nav-height); }
       .main-nav { padding: 10px 15px; }
       .logo { font-size: 24px; }
       .search-input { width: 150px; padding: 6px 10px; font-size: 14px; }
@@ -222,7 +246,6 @@ index_html = """
       .full-page-grid-title { font-size: 1.8rem; }
       .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
       
-      /* Show bottom navigation on mobile */
       .bottom-nav { display: flex; }
   }
 </style>
@@ -244,7 +267,16 @@ index_html = """
         <p style="text-align:center; color: var(--text-dark); margin-top: 40px;">No content found.</p>
       {% else %}
         <div class="full-page-grid">
-          {% for m in movies %}<a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card"><img class="movie-poster" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}"></a>{% endfor %}
+          {% for m in movies %}
+          <!-- CHANGE: Implemented lazy loading and skeleton loader -->
+          <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+            {% if m.poster %}
+              <img class="movie-poster" loading="lazy" src="{{ m.poster }}" alt="{{ m.title }}">
+            {% else %}
+              <span class="skeleton-poster"></span>
+            {% endif %}
+          </a>
+          {% endfor %}
         </div>
       {% endif %}
     </div>
@@ -271,7 +303,16 @@ index_html = """
         </div>
         <div class="carousel-wrapper">
           <div class="carousel-content">
-            {% for m in movies_list %}<a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card"><img class="movie-poster" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}"></a>{% endfor %}
+            {% for m in movies_list %}
+            <!-- CHANGE: Implemented lazy loading and skeleton loader -->
+            <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
+              {% if m.poster %}
+                <img class="movie-poster" loading="lazy" src="{{ m.poster }}" alt="{{ m.title }}">
+              {% else %}
+                <span class="skeleton-poster"></span>
+              {% endif %}
+            </a>
+            {% endfor %}
           </div>
           <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
           <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
@@ -320,7 +361,7 @@ index_html = """
 # --- END OF index_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (Final Mobile-First Polish) ---
+# --- START OF detail_html TEMPLATE (Final Mobile-First Polish with updates) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -386,10 +427,15 @@ detail_html = """
   .download-button, .episode-download-button {
       display: inline-block; padding: 12px 25px; background-color: var(--netflix-red);
       color: white; text-decoration: none; border-radius: 4px; font-weight: 700;
-      transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px;
+      transition: background-color 0.3s ease, transform 0.15s ease; /* IMPROVEMENT: Added transform transition */
+      margin-right: 10px; margin-bottom: 10px;
       text-align: center;
   }
   .download-button:hover, .episode-download-button:hover { background-color: #b00710; }
+  /* NEW: Tap feedback for download buttons */
+  .download-button:active, .episode-download-button:active {
+      transform: scale(0.97);
+  }
   .no-link-message { color: var(--text-dark); font-style: italic; }
   .episode-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #fff; }
   .episode-overview-text { font-size: 0.9rem; color: var(--text-dark); margin-bottom: 10px; }
@@ -424,7 +470,8 @@ detail_html = """
 <div class="detail-hero">
   <div class="detail-hero-background" style="background-image: url('{{ movie.poster }}');"></div>
   <div class="detail-content-wrapper">
-    <img class="detail-poster" src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
+    <!-- CHANGE: Added lazy loading to the main poster image -->
+    <img class="detail-poster" loading="lazy" src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
     <div class="detail-info">
       <h1 class="detail-title">{{ movie.title }}</h1>
       <div class="detail-meta">
@@ -501,9 +548,10 @@ admin_html = """
     button[type="submit"], .add-episode-btn {
       background: var(--netflix-red); color: white; font-weight: 700; cursor: pointer;
       border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem;
-      transition: background 0.3s ease;
+      transition: background 0.3s ease, transform 0.15s ease;
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
+    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); } /* NEW: Tap feedback */
     table { display: block; overflow-x: auto; white-space: nowrap; width: 100%; border-collapse: collapse; margin-top: 20px; }
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
     th { background: #252525; }
@@ -511,11 +559,12 @@ admin_html = """
     .action-buttons { display: flex; gap: 10px; }
     .action-buttons a, .action-buttons button {
         padding: 6px 12px; border-radius: 4px; text-decoration: none;
-        color: white; border: none; cursor: pointer; transition: opacity 0.3s ease;
+        color: white; border: none; cursor: pointer; transition: opacity 0.3s ease, transform 0.15s ease;
     }
     .edit-btn { background: #007bff; }
     .delete-btn { background: #dc3545; }
     .action-buttons a:hover, .action-buttons button:hover { opacity: 0.8; }
+    .action-buttons a:active, .action-buttons button:active { transform: scale(0.96); opacity: 0.8; } /* NEW: Tap feedback */
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -626,12 +675,14 @@ edit_html = """
     button[type="submit"], .add-episode-btn {
       background: var(--netflix-red); color: white; font-weight: 700; cursor: pointer;
       border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem;
-      transition: background 0.3s ease;
+      transition: background 0.3s ease, transform 0.15s ease;
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
+    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); } /* NEW: Tap feedback */
     .back-to-admin { display: inline-block; margin-bottom: 20px; color: var(--netflix-red); text-decoration: none; font-weight: bold; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
-    .delete-btn { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+    .delete-btn { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: transform 0.15s ease; }
+    .delete-btn:active { transform: scale(0.96); } /* NEW: Tap feedback */
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -724,7 +775,6 @@ def home():
         result = movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1)
         movies_list = list(result)
         is_full_page_list = True
-        # For a search query, the title of the page will be the query itself
         query = f'Results for "{query}"'
     else:
         limit = 18
@@ -737,11 +787,8 @@ def home():
     all_fetched_content = movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list
     processed_ids = set()
     for m in all_fetched_content:
-        # Check if this document has already been processed
         if m['_id'] not in processed_ids:
-            # Convert ObjectId to string
             m['_id'] = str(m['_id'])
-            # Add the (now string) ID to the set
             processed_ids.add(m['_id'])
 
     return render_template_string(
@@ -796,8 +843,9 @@ def movie_detail(movie_id):
                         
                         if movie.get("overview") == "No overview available." and res.get("overview"):
                             update_fields["overview"] = movie["overview"] = res["overview"]
+                        # CHANGE: Using a smaller image size (w400) for better mobile performance
                         if not movie.get("poster") and res.get("poster_path"):
-                            update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
+                            update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w400{res['poster_path']}"
                         
                         if tmdb_search_type == "movie":
                             release_date = res.get("release_date")
@@ -849,7 +897,6 @@ def admin():
             "tmdb_id": None,
         }
 
-        # Handle links or episodes
         if content_type == "movie":
             links = []
             if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
@@ -907,7 +954,6 @@ def edit_movie(movie_id):
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
         }
 
-        # Unset old fields and set new ones based on type change
         if content_type == "movie":
             links = []
             if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
