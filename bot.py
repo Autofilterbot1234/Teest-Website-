@@ -1,32 +1,36 @@
-from flask import Flask, render_template_string, request, redirect, url_for, Response, send_from_directory
+from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
 
-# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
+# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন (শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য)
 load_dotenv()
 
 app = Flask(__name__)
 
-# Environment variables
+# Environment variables for MongoDB URI and TMDb API Key
 MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+# --- অ্যাডমিন অথেন্টিকেশনের জন্য নতুন ভেরিয়েবল ও ফাংশন ---
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
-# --- অথেন্টিকেশন ফাংশন ---
 def check_auth(username, password):
+    """ইউজারনেম ও পাসওয়ার্ড সঠিক কিনা তা যাচাই করে।"""
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 def authenticate():
+    """অথেন্টিকেশন ব্যর্থ হলে 401 রেসপন্স পাঠায়।"""
     return Response(
     'Could not verify your access level for that URL.\n'
     'You have to login with proper credentials', 401,
     {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
+    """এই ডেকোরেটরটি রুট ফাংশনে অথেন্টিকেশন চেক করে।"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
@@ -34,10 +38,14 @@ def requires_auth(f):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
+# --- অথেন্টিকেশন সংক্রান্ত পরিবর্তন শেষ ---
 
-# Check for environment variables
-if not MONGO_URI or not TMDB_API_KEY:
-    print("Error: Required environment variables (MONGO_URI, TMDB_API_KEY) are not set.")
+# Check if environment variables are set
+if not MONGO_URI:
+    print("Error: MONGO_URI environment variable not set. Exiting.")
+    exit(1)
+if not TMDB_API_KEY:
+    print("Error: TMDB_API_KEY environment variable not set. Exiting.")
     exit(1)
 
 # Database connection
@@ -50,7 +58,7 @@ except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
 
-# TMDb Genre Map
+# TMDb Genre Map (for converting genre IDs to names)
 TMDb_Genre_Map = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10402: "Music", 9648: "Mystery",
@@ -58,9 +66,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
-# --- HTML টেমপ্লেটগুলো অপরিবর্তিত ---
-
-# --- START OF index_html TEMPLATE (with Automatic Hero Slider) ---
+# --- START OF index_html TEMPLATE (Final Mobile-First Polish) ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -68,7 +74,6 @@ index_html = """
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>MovieZone - Your Entertainment Hub</title>
-<link rel="icon" href="{{ url_for('favicon') }}">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
   :root {
@@ -106,31 +111,16 @@ index_html = """
   }
   .search-input:focus { background-color: rgba(0,0,0,0.9); border-color: var(--text-light); outline: none; }
 
-  /* --- NEW: Hero Slider Section --- */
-  .hero-slider-container {
-      height: 90vh;
-      position: relative;
-      width: 100%;
-      overflow: hidden;
+  .hero-section {
+      height: 90vh; position: relative; display: flex; align-items: flex-end;
+      padding: 50px; background-size: cover; background-position: center top; color: white;
   }
-  .hero-slide {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background-size: cover;
-      background-position: center top;
-      opacity: 0;
-      z-index: 1;
-      transition: opacity 0.8s ease-in-out;
-      display: flex; align-items: flex-end; padding: 50px;
-  }
-  .hero-slide.active { opacity: 1; z-index: 2; }
-  .hero-slide::before {
+  .hero-section::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
       background: linear-gradient(to top, var(--netflix-black) 10%, transparent 50%),
                   linear-gradient(to right, rgba(0,0,0,0.8) 0%, transparent 60%);
   }
-  .hero-content { position: relative; z-index: 3; max-width: 50%; }
+  .hero-content { position: relative; z-index: 2; max-width: 50%; }
   .hero-title { font-family: 'Bebas Neue', sans-serif; font-size: 5rem; font-weight: 700; margin-bottom: 1rem; line-height: 1; }
   .hero-overview {
       font-size: 1.1rem; line-height: 1.5; margin-bottom: 1.5rem; max-width: 600px;
@@ -143,25 +133,6 @@ index_html = """
   .btn.btn-primary { background-color: var(--netflix-red); color: white; }
   .btn.btn-secondary { background-color: rgba(109, 109, 110, 0.7); color: white; }
   .btn:hover { opacity: 0.8; }
-
-  /* Slider Dots Navigation */
-  .slider-dots {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 4;
-      display: flex;
-      gap: 10px;
-  }
-  .dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      background-color: rgba(255, 255, 255, 0.5);
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-  }
-  .dot.active { background-color: white; }
 
   main { padding-top: 0; }
   .carousel-row { margin: 40px 0; position: relative; }
@@ -197,7 +168,10 @@ index_html = """
   }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
 
-  @media (hover: hover) { .movie-card:hover { transform: scale(1.05); z-index: 5; } }
+  /* Apply hover effect only on devices that can hover */
+  @media (hover: hover) {
+    .movie-card:hover { transform: scale(1.05); z-index: 5; }
+  }
 
   .full-page-grid-container { padding: 100px 50px 50px 50px; }
   .full-page-grid-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; }
@@ -206,11 +180,14 @@ index_html = """
   }
   .full-page-grid .movie-card { min-width: 0; }
   
+  /* --- BOTTOM NAVIGATION BAR --- */
   .bottom-nav {
-      display: none; position: fixed; bottom: 0; left: 0; right: 0;
+      display: none; /* Hidden by default on desktop */
+      position: fixed; bottom: 0; left: 0; right: 0;
       height: var(--nav-height); background-color: #181818;
       border-top: 1px solid #282828;
-      justify-content: space-around; align-items: center; z-index: 200;
+      justify-content: space-around; align-items: center;
+      z-index: 200;
   }
   .nav-item {
       display: flex; flex-direction: column; align-items: center;
@@ -219,21 +196,20 @@ index_html = """
   }
   .nav-item i { font-size: 20px; margin-bottom: 4px; }
   .nav-item.active { color: var(--text-light); }
-  .nav-item.active .fa-home { color: var(--netflix-red); }
+  .nav-item.active .fa-home { color: var(--netflix-red); } /* Special color for home */
 
+  /* --- MOBILE ENHANCEMENTS --- */
   @media (max-width: 768px) {
-      body { padding-bottom: var(--nav-height); }
+      body { padding-bottom: var(--nav-height); } /* Ensure space for bottom nav */
       .main-nav { padding: 10px 15px; }
       .logo { font-size: 24px; }
       .search-input { width: 150px; padding: 6px 10px; font-size: 14px; }
       
-      .hero-slider-container { height: 60vh; }
-      .hero-slide { padding: 15px; align-items: center; }
+      .hero-section { height: 60vh; padding: 15px; align-items: center; }
       .hero-content { max-width: 90%; text-align: center; }
       .hero-title { font-size: 2.8rem; }
       .hero-overview { display: none; }
       .hero-buttons .btn { padding: 8px 18px; font-size: 0.9rem; }
-      .slider-dots { bottom: 15px; }
       
       .carousel-arrow { display: none; }
       .carousel-row { margin: 25px 0; }
@@ -246,6 +222,7 @@ index_html = """
       .full-page-grid-title { font-size: 1.8rem; }
       .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
       
+      /* Show bottom navigation on mobile */
       .bottom-nav { display: flex; }
   }
 </style>
@@ -272,25 +249,15 @@ index_html = """
       {% endif %}
     </div>
   {% else %} {# Homepage with carousels #}
-    {# --- NEW Hero Slider --- #}
     {% if trending_movies %}
-      <div class="hero-slider-container">
-        {% for movie in trending_movies | slice(5) %}
-        <div class="hero-slide {% if loop.first %}active{% endif %}" style="background-image: url('{{ movie.poster or '' }}');">
-          <div class="hero-content">
-            <h1 class="hero-title">{{ movie.title }}</h1>
-            <p class="hero-overview">{{ movie.overview }}</p>
-            <div class="hero-buttons">
-              <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>
-              <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-secondary"><i class="fas fa-info-circle"></i> More Info</a>
-            </div>
+      <div class="hero-section" style="background-image: url('{{ trending_movies[0].poster or '' }}');">
+        <div class="hero-content">
+          <h1 class="hero-title">{{ trending_movies[0].title }}</h1>
+          <p class="hero-overview">{{ trending_movies[0].overview }}</p>
+          <div class="hero-buttons">
+            <a href="{{ url_for('movie_detail', movie_id=trending_movies[0]._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>
+            <a href="{{ url_for('movie_detail', movie_id=trending_movies[0]._id) }}" class="btn btn-secondary"><i class="fas fa-info-circle"></i> More Info</a>
           </div>
-        </div>
-        {% endfor %}
-        <div class="slider-dots">
-          {% for movie in trending_movies | slice(5) %}
-          <span class="dot {% if loop.first %}active{% endif %}" data-slide-to="{{ loop.index0 }}"></span>
-          {% endfor %}
         </div>
       </div>
     {% endif %}
@@ -337,52 +304,14 @@ index_html = """
 </nav>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const nav = document.querySelector('.main-nav');
-        if (nav) {
-            window.addEventListener('scroll', () => { window.scrollY > 50 ? nav.classList.add('scrolled') : nav.classList.remove('scrolled'); });
-        }
-
-        document.querySelectorAll('.carousel-arrow').forEach(button => {
-            button.addEventListener('click', () => {
-                const carousel = button.closest('.carousel-wrapper').querySelector('.carousel-content');
-                const scroll = carousel.clientWidth * 0.8;
-                carousel.scrollLeft += button.classList.contains('next') ? scroll : -scroll;
-            });
+    const nav = document.querySelector('.main-nav');
+    window.addEventListener('scroll', () => { window.scrollY > 50 ? nav.classList.add('scrolled') : nav.classList.remove('scrolled'); });
+    document.querySelectorAll('.carousel-arrow').forEach(button => {
+        button.addEventListener('click', () => {
+            const carousel = button.parentElement.querySelector('.carousel-content');
+            const scroll = carousel.clientWidth * 0.8;
+            carousel.scrollLeft += button.classList.contains('next') ? scroll : -scroll;
         });
-
-        const sliderContainer = document.querySelector('.hero-slider-container');
-        if (sliderContainer) {
-            const slides = document.querySelectorAll('.hero-slide');
-            const dots = document.querySelectorAll('.dot');
-            let currentSlide = 0;
-            let slideInterval;
-
-            function showSlide(n) {
-                if (slides.length === 0) return;
-                currentSlide = (n + slides.length) % slides.length;
-                slides.forEach(slide => slide.classList.remove('active'));
-                dots.forEach(dot => dot.classList.remove('active'));
-                slides[currentSlide].classList.add('active');
-                dots[currentSlide].classList.add('active');
-            }
-
-            function nextSlide() { showSlide(currentSlide + 1); }
-            
-            function startSlider() {
-                clearInterval(slideInterval);
-                slideInterval = setInterval(nextSlide, 5000); // 5 seconds
-            }
-
-            dots.forEach(dot => {
-                dot.addEventListener('click', () => {
-                    showSlide(parseInt(dot.getAttribute('data-slide-to')));
-                    startSlider(); // Reset timer on manual click
-                });
-            });
-
-            if (slides.length > 1) { startSlider(); }
-        }
     });
 </script>
 </body>
@@ -399,7 +328,6 @@ detail_html = """
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>{{ movie.title if movie else "Content Not Found" }} - MovieZone</title>
-<link rel="icon" href="{{ url_for('favicon') }}">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
   :root {
@@ -551,7 +479,6 @@ admin_html = """
 <head>
   <title>Admin Panel - MovieZone</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="{{ url_for('favicon') }}">
   <style>
     :root {
       --netflix-red: #E50914; --netflix-black: #141414;
@@ -680,7 +607,6 @@ edit_html = """
 <head>
   <title>Edit Content - MovieZone</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="{{ url_for('favicon') }}">
   <style>
     :root {
       --netflix-red: #E50914; --netflix-black: #141414;
@@ -781,8 +707,6 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
-# --- START OF PYTHON/FLASK ROUTES ---
-
 @app.route('/')
 def home():
     query = request.args.get('q')
@@ -800,6 +724,7 @@ def home():
         result = movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1)
         movies_list = list(result)
         is_full_page_list = True
+        # For a search query, the title of the page will be the query itself
         query = f'Results for "{query}"'
     else:
         limit = 18
@@ -812,9 +737,12 @@ def home():
     all_fetched_content = movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list
     processed_ids = set()
     for m in all_fetched_content:
-        if m.get('_id') and m['_id'] not in processed_ids:
-            processed_ids.add(m['_id']) # Add original ObjectId
+        # Check if this document has already been processed
+        if m['_id'] not in processed_ids:
+            # Convert ObjectId to string
             m['_id'] = str(m['_id'])
+            # Add the (now string) ID to the set
+            processed_ids.add(m['_id'])
 
     return render_template_string(
         index_html, 
@@ -828,12 +756,9 @@ def home():
         is_full_page_list=is_full_page_list
     )
 
+
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
-    # সমস্যা ২ এর সমাধান: যদি movie_id খালি থাকে, তবে হোমপেজে রিডাইরেক্ট করুন
-    if not movie_id:
-        return redirect(url_for('home'))
-        
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if movie:
@@ -843,9 +768,8 @@ def movie_detail(movie_id):
             
             should_fetch_tmdb = TMDB_API_KEY and (
                 not movie.get("tmdb_id") or 
-                not movie.get("overview") or movie.get("overview") == "No overview available." or 
-                not movie.get("poster") or 
-                not movie.get("genres")
+                movie.get("overview") == "No overview available." or 
+                not movie.get("poster")
             )
 
             if should_fetch_tmdb:
@@ -870,7 +794,7 @@ def movie_detail(movie_id):
                         res = requests.get(detail_url, timeout=5).json()
                         update_fields = {}
                         
-                        if (not movie.get("overview") or movie.get("overview") == "No overview available.") and res.get("overview"):
+                        if movie.get("overview") == "No overview available." and res.get("overview"):
                             update_fields["overview"] = movie["overview"] = res["overview"]
                         if not movie.get("poster") and res.get("poster_path"):
                             update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
@@ -899,9 +823,8 @@ def movie_detail(movie_id):
 
         return render_template_string(detail_html, movie=movie)
     except Exception as e:
-        print(f"Error fetching movie detail for ID '{movie_id}': {e}")
-        return redirect(url_for('home'))
-
+        print(f"Error fetching movie detail: {e}")
+        return render_template_string(detail_html, movie=None)
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
@@ -912,16 +835,21 @@ def admin():
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
         
         movie_data = {
-            "title": request.form.get("title"), "type": content_type,
-            "quality": quality_tag, "top_label": request.form.get("top_label", ""),
+            "title": request.form.get("title"),
+            "type": content_type,
+            "quality": quality_tag,
+            "top_label": request.form.get("top_label", ""),
+            "is_trending": is_trending,
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "overview": request.form.get("overview", "No overview available."),
-            "poster": request.form.get("poster_url", ""), "year": request.form.get("year", "N/A"),
+            "poster": request.form.get("poster_url", ""),
+            "year": request.form.get("year", "N/A"),
             "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "tmdb_id": None, "release_date": request.form.get("year", "N/A"),
+            "tmdb_id": None,
         }
 
+        # Handle links or episodes
         if content_type == "movie":
             links = []
             if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
@@ -931,26 +859,16 @@ def admin():
         else:
             episodes = []
             ep_numbers = request.form.getlist('episode_number[]')
-            ep_titles = request.form.getlist('episode_title[]')
-            ep_overviews = request.form.getlist('episode_overview[]')
-            ep_link_480ps = request.form.getlist('episode_link_480p[]')
-            ep_link_720ps = request.form.getlist('episode_link_720p[]')
-            ep_link_1080ps = request.form.getlist('episode_link_1080p[]')
-
             for i in range(len(ep_numbers)):
-                if not ep_numbers[i]: continue
                 ep_links = []
-                if ep_link_480ps and i < len(ep_link_480ps) and ep_link_480ps[i]:
-                    ep_links.append({"quality": "480p", "size": "N/A", "url": ep_link_480ps[i]})
-                if ep_link_720ps and i < len(ep_link_720ps) and ep_link_720ps[i]:
-                    ep_links.append({"quality": "720p", "size": "N/A", "url": ep_link_720ps[i]})
-                if ep_link_1080ps and i < len(ep_link_1080ps) and ep_link_1080ps[i]:
-                    ep_links.append({"quality": "1080p", "size": "N/A", "url": ep_link_1080ps[i]})
-                
+                if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": request.form.getlist('episode_link_480p[]')[i]})
+                if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": request.form.getlist('episode_link_720p[]')[i]})
+                if request.form.getlist('episode_link_1080p[]')[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": request.form.getlist('episode_link_1080p[]')[i]})
                 episodes.append({
                     "episode_number": int(ep_numbers[i]),
-                    "title": ep_titles[i] if i < len(ep_titles) else "",
-                    "overview": ep_overviews[i] if i < len(ep_overviews) else "", "links": ep_links
+                    "title": request.form.getlist('episode_title[]')[i],
+                    "overview": request.form.getlist('episode_overview[]')[i],
+                    "links": ep_links
                 })
             movie_data["episodes"] = episodes
 
@@ -958,6 +876,7 @@ def admin():
             movies.insert_one(movie_data)
         except Exception as e:
             print(f"DB insert error: {e}")
+            
         return redirect(url_for('admin'))
 
     admin_query = request.args.get('q')
@@ -972,57 +891,46 @@ def admin():
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    try:
-        movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
-    except:
-        return "Invalid Movie ID", 404
+    movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
     if not movie_obj: return "Movie not found", 404
 
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         is_trending = request.form.get("is_trending") == "true"
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
-        
+
         update_data = {
             "title": request.form.get("title"), "type": content_type, "quality": quality_tag,
             "top_label": request.form.get("top_label", ""), "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "overview": request.form.get("overview", "No overview available."), "poster": request.form.get("poster_url", ""),
             "year": request.form.get("year", "N/A"), "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "release_date": request.form.get("year", "N/A"),
         }
 
+        # Unset old fields and set new ones based on type change
         if content_type == "movie":
             links = []
             if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
             if request.form.get("link_720p"): links.append({"quality": "720p", "size": "1.4GB", "url": request.form.get("link_720p")})
             if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "2.9GB", "url": request.form.get("link_1080p")})
             update_data["links"] = links
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data, "$unset": {"episodes": ""}})
-        else:
+            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
+        else: # series
             episodes = []
             ep_numbers = request.form.getlist('episode_number[]')
-            ep_titles = request.form.getlist('episode_title[]')
-            ep_overviews = request.form.getlist('episode_overview[]')
-            ep_link_480ps = request.form.getlist('episode_link_480p[]')
-            ep_link_720ps = request.form.getlist('episode_link_720p[]')
-            ep_link_1080ps = request.form.getlist('episode_link_1080p[]')
-
             for i in range(len(ep_numbers)):
-                if not ep_numbers[i]: continue
                 ep_links = []
-                if ep_link_480ps and i < len(ep_link_480ps) and ep_link_480ps[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": ep_link_480ps[i]})
-                if ep_link_720ps and i < len(ep_link_720ps) and ep_link_720ps[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": ep_link_720ps[i]})
-                if ep_link_1080ps and i < len(ep_link_1080ps) and ep_link_1080ps[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": ep_link_1080ps[i]})
-
+                if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": request.form.getlist('episode_link_480p[]')[i]})
+                if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": request.form.getlist('episode_link_720p[]')[i]})
+                if request.form.getlist('episode_link_1080p[]')[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": request.form.getlist('episode_link_1080p[]')[i]})
                 episodes.append({
-                    "episode_number": int(ep_numbers[i]),
-                    "title": ep_titles[i] if i < len(ep_titles) else "",
-                    "overview": ep_overviews[i] if i < len(ep_overviews) else "", "links": ep_links
+                    "episode_number": int(ep_numbers[i]), "title": request.form.getlist('episode_title[]')[i],
+                    "overview": request.form.getlist('episode_overview[]')[i], "links": ep_links
                 })
             update_data["episodes"] = episodes
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data, "$unset": {"links": ""}})
+            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": ""}})
         
+        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
         return redirect(url_for('admin'))
 
     movie_obj['_id'] = str(movie_obj['_id'])
@@ -1036,12 +944,6 @@ def delete_movie(movie_id):
     except Exception as e:
         print(f"DB delete error: {e}")
     return redirect(url_for('admin'))
-
-# নতুন যুক্ত করা হয়েছে: favicon.ico এর জন্য রুট
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 def render_full_list(content_list, title):
     for m in content_list:
