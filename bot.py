@@ -1,36 +1,32 @@
-from flask import Flask, render_template_string, request, redirect, url_for, Response
+from flask import Flask, render_template_string, request, redirect, url_for, Response, send_from_directory
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
 
-# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন (শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য)
+# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
 
 app = Flask(__name__)
 
-# Environment variables for MongoDB URI and TMDb API Key
+# Environment variables
 MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-# --- অ্যাডমিন অথেন্টিকেশনের জন্য নতুন ভেরিয়েবল ও ফাংশন ---
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
 
+# --- অথেন্টিকেশন ফাংশন ---
 def check_auth(username, password):
-    """ইউজারনেম ও পাসওয়ার্ড সঠিক কিনা তা যাচাই করে।"""
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 def authenticate():
-    """অথেন্টিকেশন ব্যর্থ হলে 401 রেসপন্স পাঠায়।"""
     return Response(
     'Could not verify your access level for that URL.\n'
     'You have to login with proper credentials', 401,
     {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
-    """এই ডেকোরেটরটি রুট ফাংশনে অথেন্টিকেশন চেক করে।"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
@@ -38,14 +34,10 @@ def requires_auth(f):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
-# --- অথেন্টিকেশন সংক্রান্ত পরিবর্তন শেষ ---
 
-# Check if environment variables are set
-if not MONGO_URI:
-    print("Error: MONGO_URI environment variable not set. Exiting.")
-    exit(1)
-if not TMDB_API_KEY:
-    print("Error: TMDB_API_KEY environment variable not set. Exiting.")
+# Check for environment variables
+if not MONGO_URI or not TMDB_API_KEY:
+    print("Error: Required environment variables (MONGO_URI, TMDB_API_KEY) are not set.")
     exit(1)
 
 # Database connection
@@ -58,7 +50,7 @@ except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
 
-# TMDb Genre Map (for converting genre IDs to names)
+# TMDb Genre Map
 TMDb_Genre_Map = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10402: "Music", 9648: "Mystery",
@@ -66,6 +58,7 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
+# --- HTML টেমপ্লেটগুলো অপরিবর্তিত ---
 
 # --- START OF index_html TEMPLATE (with Automatic Hero Slider) ---
 index_html = """
@@ -75,6 +68,7 @@ index_html = """
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>MovieZone - Your Entertainment Hub</title>
+<link rel="icon" href="{{ url_for('favicon') }}">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
   :root {
@@ -405,6 +399,7 @@ detail_html = """
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>{{ movie.title if movie else "Content Not Found" }} - MovieZone</title>
+<link rel="icon" href="{{ url_for('favicon') }}">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
   :root {
@@ -556,6 +551,7 @@ admin_html = """
 <head>
   <title>Admin Panel - MovieZone</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="{{ url_for('favicon') }}">
   <style>
     :root {
       --netflix-red: #E50914; --netflix-black: #141414;
@@ -684,6 +680,7 @@ edit_html = """
 <head>
   <title>Edit Content - MovieZone</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="{{ url_for('favicon') }}">
   <style>
     :root {
       --netflix-red: #E50914; --netflix-black: #141414;
@@ -784,6 +781,8 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
+# --- START OF PYTHON/FLASK ROUTES ---
+
 @app.route('/')
 def home():
     query = request.args.get('q')
@@ -813,9 +812,9 @@ def home():
     all_fetched_content = movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list
     processed_ids = set()
     for m in all_fetched_content:
-        if m['_id'] not in processed_ids:
+        if m.get('_id') and m['_id'] not in processed_ids:
+            processed_ids.add(m['_id']) # Add original ObjectId
             m['_id'] = str(m['_id'])
-            processed_ids.add(m['_id'])
 
     return render_template_string(
         index_html, 
@@ -829,9 +828,12 @@ def home():
         is_full_page_list=is_full_page_list
     )
 
-
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
+    # সমস্যা ২ এর সমাধান: যদি movie_id খালি থাকে, তবে হোমপেজে রিডাইরেক্ট করুন
+    if not movie_id:
+        return redirect(url_for('home'))
+        
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if movie:
@@ -897,8 +899,9 @@ def movie_detail(movie_id):
 
         return render_template_string(detail_html, movie=movie)
     except Exception as e:
-        print(f"Error fetching movie detail: {e}")
-        return render_template_string(detail_html, movie=None)
+        print(f"Error fetching movie detail for ID '{movie_id}': {e}")
+        return redirect(url_for('home'))
+
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
@@ -909,17 +912,14 @@ def admin():
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
         
         movie_data = {
-            "title": request.form.get("title"),
-            "type": content_type,
-            "quality": quality_tag,
-            "top_label": request.form.get("top_label", ""),
+            "title": request.form.get("title"), "type": content_type,
+            "quality": quality_tag, "top_label": request.form.get("top_label", ""),
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "overview": request.form.get("overview", "No overview available."),
-            "poster": request.form.get("poster_url", ""),
-            "year": request.form.get("year", "N/A"),
+            "poster": request.form.get("poster_url", ""), "year": request.form.get("year", "N/A"),
             "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "tmdb_id": None,
+            "tmdb_id": None, "release_date": request.form.get("year", "N/A"),
         }
 
         if content_type == "movie":
@@ -938,6 +938,7 @@ def admin():
             ep_link_1080ps = request.form.getlist('episode_link_1080p[]')
 
             for i in range(len(ep_numbers)):
+                if not ep_numbers[i]: continue
                 ep_links = []
                 if ep_link_480ps and i < len(ep_link_480ps) and ep_link_480ps[i]:
                     ep_links.append({"quality": "480p", "size": "N/A", "url": ep_link_480ps[i]})
@@ -946,20 +947,17 @@ def admin():
                 if ep_link_1080ps and i < len(ep_link_1080ps) and ep_link_1080ps[i]:
                     ep_links.append({"quality": "1080p", "size": "N/A", "url": ep_link_1080ps[i]})
                 
-                if ep_numbers[i]: # Ensure there is an episode number
-                    episodes.append({
-                        "episode_number": int(ep_numbers[i]),
-                        "title": ep_titles[i] if i < len(ep_titles) else "",
-                        "overview": ep_overviews[i] if i < len(ep_overviews) else "",
-                        "links": ep_links
-                    })
+                episodes.append({
+                    "episode_number": int(ep_numbers[i]),
+                    "title": ep_titles[i] if i < len(ep_titles) else "",
+                    "overview": ep_overviews[i] if i < len(ep_overviews) else "", "links": ep_links
+                })
             movie_data["episodes"] = episodes
 
         try:
             movies.insert_one(movie_data)
         except Exception as e:
             print(f"DB insert error: {e}")
-            
         return redirect(url_for('admin'))
 
     admin_query = request.args.get('q')
@@ -974,20 +972,24 @@ def admin():
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
-    movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
+    try:
+        movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
+    except:
+        return "Invalid Movie ID", 404
     if not movie_obj: return "Movie not found", 404
 
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         is_trending = request.form.get("is_trending") == "true"
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
-
+        
         update_data = {
             "title": request.form.get("title"), "type": content_type, "quality": quality_tag,
             "top_label": request.form.get("top_label", ""), "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "overview": request.form.get("overview", "No overview available."), "poster": request.form.get("poster_url", ""),
             "year": request.form.get("year", "N/A"), "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
+            "release_date": request.form.get("year", "N/A"),
         }
 
         if content_type == "movie":
@@ -996,8 +998,8 @@ def edit_movie(movie_id):
             if request.form.get("link_720p"): links.append({"quality": "720p", "size": "1.4GB", "url": request.form.get("link_720p")})
             if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "2.9GB", "url": request.form.get("link_1080p")})
             update_data["links"] = links
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
-        else: # series
+            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data, "$unset": {"episodes": ""}})
+        else:
             episodes = []
             ep_numbers = request.form.getlist('episode_number[]')
             ep_titles = request.form.getlist('episode_title[]')
@@ -1007,25 +1009,20 @@ def edit_movie(movie_id):
             ep_link_1080ps = request.form.getlist('episode_link_1080p[]')
 
             for i in range(len(ep_numbers)):
+                if not ep_numbers[i]: continue
                 ep_links = []
-                if ep_link_480ps and i < len(ep_link_480ps) and ep_link_480ps[i]:
-                    ep_links.append({"quality": "480p", "size": "N/A", "url": ep_link_480ps[i]})
-                if ep_link_720ps and i < len(ep_link_720ps) and ep_link_720ps[i]:
-                    ep_links.append({"quality": "720p", "size": "N/A", "url": ep_link_720ps[i]})
-                if ep_link_1080ps and i < len(ep_link_1080ps) and ep_link_1080ps[i]:
-                    ep_links.append({"quality": "1080p", "size": "N/A", "url": ep_link_1080ps[i]})
+                if ep_link_480ps and i < len(ep_link_480ps) and ep_link_480ps[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": ep_link_480ps[i]})
+                if ep_link_720ps and i < len(ep_link_720ps) and ep_link_720ps[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": ep_link_720ps[i]})
+                if ep_link_1080ps and i < len(ep_link_1080ps) and ep_link_1080ps[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": ep_link_1080ps[i]})
 
-                if ep_numbers[i]:
-                    episodes.append({
-                        "episode_number": int(ep_numbers[i]),
-                        "title": ep_titles[i] if i < len(ep_titles) else "",
-                        "overview": ep_overviews[i] if i < len(ep_overviews) else "",
-                        "links": ep_links
-                    })
+                episodes.append({
+                    "episode_number": int(ep_numbers[i]),
+                    "title": ep_titles[i] if i < len(ep_titles) else "",
+                    "overview": ep_overviews[i] if i < len(ep_overviews) else "", "links": ep_links
+                })
             update_data["episodes"] = episodes
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": ""}})
+            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data, "$unset": {"links": ""}})
         
-        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
         return redirect(url_for('admin'))
 
     movie_obj['_id'] = str(movie_obj['_id'])
@@ -1039,6 +1036,12 @@ def delete_movie(movie_id):
     except Exception as e:
         print(f"DB delete error: {e}")
     return redirect(url_for('admin'))
+
+# নতুন যুক্ত করা হয়েছে: favicon.ico এর জন্য রুট
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 def render_full_list(content_list, title):
     for m in content_list:
