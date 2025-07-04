@@ -1009,8 +1009,14 @@ def add_from_bot():
     print(f"Received from bot (after processing): Title='{title}', Quality='{quality}', Size='{size}', Link='{download_link}'")
 
     # --- ধাপ ৩: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ (টাইটেল ব্যবহার করে) ---
-    overview, poster, year, genres, release_date, tmdb_id, actual_content_type = \
-        "No overview available.", "", "N/A", [], "", None, initial_content_type
+    overview = "No overview available."
+    poster = ""
+    year = "N/A"
+    genres = []
+    release_date = ""
+    tmdb_id = None
+    actual_content_type = initial_content_type
+    original_language = "N/A" # <-- এই লাইনটি যোগ করা হয়েছে
 
     try:
         # TMDb সার্চের জন্য URL তৈরি করা। movie এবং tv (series) উভয়ই সার্চ করা।
@@ -1045,7 +1051,7 @@ def add_from_bot():
                 if res.get("genres"):
                     genres = [g['name'] for g in res['genres']]
                 
-                original_language = res.get("original_language", "N/A")
+                original_language = res.get("original_language", "N/A") # <-- এখানে ভ্যালু অ্যাসাইন হবে যদি TMDb থেকে আসে
 
                 print(f"Successfully fetched details for '{title}' from TMDb (Type: {actual_content_type}).")
             else:
@@ -1097,10 +1103,10 @@ def add_from_bot():
                 }}
             )
             print(f"Added new link ({quality}) to existing content '{title}'.")
-            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{title}'."}, 200
+            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{title}'.", "movie_id": str(existing_content["_id"])}, 200
         else:
             print(f"Link with quality '{quality}' and URL '{download_link}' already exists for '{title}'. Skipping.")
-            return {"status": "info", "message": f"Link with quality '{quality}' already exists for '{title}'. Skipping."}, 200
+            return {"status": "info", "message": f"Link with quality '{quality}' already exists for '{title}'. Skipping.", "movie_id": str(existing_content["_id"])}, 200
     else:
         print(f"Adding new content: '{title}' (Type: {actual_content_type})")
         new_content = {
@@ -1115,16 +1121,16 @@ def add_from_bot():
             "year": year,
             "release_date": release_date,
             "genres": genres,
-            "original_language": original_language,
+            "original_language": original_language, # <-- এখানে সঠিক ভ্যালু চলে আসবে
             "links": [{"quality": quality, "size": size, "url": download_link}],
             "episodes": [],
             "tmdb_id": tmdb_id
         }
         
         try:
-            movies.insert_one(new_content)
-            print(f"SUCCESS: Automatically added '{title}' to the database via bot.")
-            return {"status": "success", "message": f"'{title}' added successfully."}, 201
+            inserted_id = movies.insert_one(new_content).inserted_id
+            print(f"SUCCESS: Automatically added '{title}' to the database via bot. New ID: {inserted_id}")
+            return {"status": "success", "message": f"'{title}' added successfully.", "movie_id": str(inserted_id)}, 201
         except Exception as e:
             print(f"DATABASE ERROR: Failed to insert '{title}'. Error: {e}")
             return {"status": "error", "message": "Failed to save to database."}, 500
@@ -1138,7 +1144,7 @@ def extract_title_from_link(link):
         # URL থেকে ফাইলের নাম বের করা
         filename = link.split('/')[-1]
         # এক্সটেনশন এবং সম্ভাব্য অন্যান্য মেটাডেটা অপসারণ
-        # যেমন: .mp4, .mkv, .avi, .720p, .1080p, .x264, .webdl ইত্যাদি
+        # যেমন: .mp4, .mkv, .avi, .webm, .m3u8, ইত্যাদি
         cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8)$', '', filename, flags=re.IGNORECASE)
         cleaned_filename = re.sub(r'\.\d{3,4}p|\.x\d{3}|\.web-?dl|\.bluray|\.hdrip|\.brrip|\.dvdrip|\.dubbed|\.hindi|\.english|\.dual\.audio', '', cleaned_filename, flags=re.IGNORECASE)
         cleaned_filename = re.sub(r'\.\d{4}', '', cleaned_filename) # বছর অপসারণ
@@ -1147,6 +1153,7 @@ def extract_title_from_link(link):
         # কিছু সাধারণ কীওয়ার্ড যা টাইটেলে থাকা উচিত নয়
         keywords_to_remove = ["movies", "series", "full", "movie", "official"]
         for kw in keywords_to_remove:
+            # শব্দগুলো পুরো শব্দ হিসেবে মুছে ফেলবে, যেমন "movie" যদি "movieworld" এর অংশ হয় তবে তা মুছবে না
             cleaned_filename = re.sub(r'\b' + re.escape(kw) + r'\b', '', cleaned_filename, flags=re.IGNORECASE).strip()
 
         # অতিরিক্ত স্পেস অপসারণ
