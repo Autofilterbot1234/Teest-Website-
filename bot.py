@@ -126,7 +126,7 @@ index_html = """
   .btn.btn-primary { background-color: var(--netflix-red); color: white; }
   .btn.btn-secondary { background-color: rgba(109, 109, 110, 0.7); color: white; }
   .btn:hover { opacity: 0.8; }
-  .btn:active { transform: scale(0.97); opacity: 0.7; } /* NEW: Tap feedback for buttons */
+  .btn:active { transform: scale(0.97); opacity: 0.7; }
 
   main { padding-top: 0; }
   .carousel-row { margin: 40px 0; position: relative; }
@@ -162,7 +162,6 @@ index_html = """
   }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
 
-  /* NEW: Skeleton Loader for posters for a better loading experience */
   .skeleton-poster {
       width: 100%; aspect-ratio: 2 / 3;
       background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
@@ -178,7 +177,6 @@ index_html = """
   @media (hover: hover) {
     .movie-card:hover { transform: scale(1.05); z-index: 5; }
   }
-  /* NEW: Tap feedback for movie cards on touch devices */
   .movie-card:active {
       transform: scale(0.98);
       transition: transform 0.1s ease-in-out;
@@ -191,7 +189,6 @@ index_html = """
   }
   .full-page-grid .movie-card { min-width: 0; }
   
-  /* --- BOTTOM NAVIGATION BAR (IMPROVED) --- */
   .bottom-nav {
       display: none; position: fixed; bottom: 0; left: 0; right: 0;
       height: var(--nav-height); background-color: #181818;
@@ -205,7 +202,6 @@ index_html = """
       padding: 5px 0; transition: color 0.2s ease, font-weight 0.2s ease;
   }
   .nav-item i { font-size: 20px; margin-bottom: 4px; transition: transform 0.2s ease; }
-  /* IMPROVEMENT: Made active state more prominent */
   .nav-item.active {
       color: var(--text-light);
       font-weight: 700;
@@ -215,7 +211,6 @@ index_html = """
   }
   .nav-item.active .fa-home { color: var(--netflix-red); }
 
-  /* --- MOBILE ENHANCEMENTS --- */
   @media (max-width: 768px) {
       body { padding-bottom: var(--nav-height); }
       .main-nav { padding: 10px 15px; }
@@ -418,12 +413,11 @@ detail_html = """
   .download-button, .episode-download-button {
       display: inline-block; padding: 12px 25px; background-color: var(--netflix-red);
       color: white; text-decoration: none; border-radius: 4px; font-weight: 700;
-      transition: background-color 0.3s ease, transform 0.15s ease; /* IMPROVEMENT: Added transform transition */
+      transition: background-color 0.3s ease, transform 0.15s ease;
       margin-right: 10px; margin-bottom: 10px;
       text-align: center;
   }
   .download-button:hover, .episode-download-button:hover { background-color: #b00710; }
-  /* NEW: Tap feedback for download buttons */
   .download-button:active, .episode-download-button:active {
       transform: scale(0.97);
   }
@@ -541,7 +535,7 @@ admin_html = """
       transition: background 0.3s ease, transform 0.15s ease;
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
-    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); } /* NEW: Tap feedback */
+    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); }
     table { display: block; overflow-x: auto; white-space: nowrap; width: 100%; border-collapse: collapse; margin-top: 20px; }
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
     th { background: #252525; }
@@ -554,7 +548,7 @@ admin_html = """
     .edit-btn { background: #007bff; }
     .delete-btn { background: #dc3545; }
     .action-buttons a:hover, .action-buttons button:hover { opacity: 0.8; }
-    .action-buttons a:active, .action-buttons button:active { transform: scale(0.96); opacity: 0.8; } /* NEW: Tap feedback */
+    .action-buttons a:active, .action-buttons button:active { transform: scale(0.96); opacity: 0.8; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -668,11 +662,11 @@ edit_html = """
       transition: background 0.3s ease, transform 0.15s ease;
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
-    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); } /* NEW: Tap feedback */
+    button[type="submit"]:active, .add-episode-btn:active { transform: scale(0.97); }
     .back-to-admin { display: inline-block; margin-bottom: 20px; color: var(--netflix-red); text-decoration: none; font-weight: bold; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
     .delete-btn { background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: transform 0.15s ease; }
-    .delete-btn:active { transform: scale(0.96); } /* NEW: Tap feedback */
+    .delete-btn:active { transform: scale(0.96); }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -803,7 +797,6 @@ def admin():
             "vote_average": 0.0
         }
 
-        # মুভি লিঙ্ক যোগ করা
         if content_type == 'movie':
             links = []
             if request.form.get("link_480p"): links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p"), "label": "480p Download"})
@@ -811,16 +804,14 @@ def admin():
             if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p"), "label": "1080p Download"})
             movie_data["links"] = links
             movie_data["episodes"] = []
-        
-        # সিরিজ এপিসোড যোগ করা
         elif content_type == 'series':
-            episodes_data, episode_numbers, episode_titles, episode_overviews, episode_link_480p, episode_link_720p, episode_link_1080p = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
-            for i in range(len(episode_numbers)):
+            episodes_data, e_nums, e_titles, e_ovs, e_480, e_720, e_1080 = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
+            for i in range(len(e_nums)):
                 ep_links = []
-                if episode_link_480p[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
-                if episode_link_720p[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
-                if episode_link_1080p[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
-                episodes_data.append({"episode_number": int(episode_numbers[i]), "title": episode_titles[i], "overview": episode_overviews[i], "links": ep_links})
+                if e_480[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": e_480[i], "label": "480p Download"})
+                if e_720[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": e_720[i], "label": "720p Download"})
+                if e_1080[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": e_1080[i], "label": "1080p Download"})
+                episodes_data.append({"episode_number": int(e_nums[i]), "title": e_titles[i], "overview": e_ovs[i], "links": ep_links})
             movie_data["episodes"] = episodes_data
             movie_data["links"] = []
 
@@ -866,13 +857,13 @@ def edit_movie(movie_id):
             updated_data["links"] = links
             updated_data["episodes"] = []
         elif content_type == 'series':
-            episodes_data, episode_numbers, episode_titles, episode_overviews, episode_link_480p, episode_link_720p, episode_link_1080p = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
-            for i in range(len(episode_numbers)):
+            episodes_data, e_nums, e_titles, e_ovs, e_480, e_720, e_1080 = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
+            for i in range(len(e_nums)):
                 ep_links = []
-                if episode_link_480p[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
-                if episode_link_720p[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
-                if episode_link_1080p[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
-                episodes_data.append({"episode_number": int(episode_numbers[i]), "title": episode_titles[i], "overview": episode_overviews[i], "links": ep_links})
+                if e_480[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": e_480[i], "label": "480p Download"})
+                if e_720[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": e_720[i], "label": "720p Download"})
+                if e_1080[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": e_1080[i], "label": "1080p Download"})
+                episodes_data.append({"episode_number": int(e_nums[i]), "title": e_titles[i], "overview": e_ovs[i], "links": ep_links})
             updated_data["episodes"] = episodes_data
             updated_data["links"] = []
 
@@ -921,49 +912,29 @@ def recently_added_all():
 # === চূড়ান্ত ইউটিলিটি ফাংশন: লিঙ্ক থেকে টাইটেল, কোয়ালিটি, সাইজ অনুমান করার জন্য ===
 # ===================================================================
 def extract_title_from_link(link):
-    """
-    এই ফাংশনটি একটি ডাউনলোড লিঙ্ক থেকে অপ্রয়োজনীয় ট্যাগ (যেমন সাল, কোয়ালিটি, ভাষা) বাদ দিয়ে 
-    শুধুমাত্র মুভি বা সিরিজের আসল টাইটেলটি বের করার চেষ্টা করে।
-    """
     try:
         filename = link.split('/')[-1].replace('%20', ' ')
-        # প্রথমে ফাইল এক্সটেনশন বাদ দিন
         cleaned_title = re.sub(r'\.(mkv|mp4|avi|mov|webm|flv|wmv|srt|zip|rar)$', '', filename, flags=re.IGNORECASE)
-        
-        # সাধারণ বিভাজকগুলিকে স্পেস দিয়ে প্রতিস্থাপন করুন
         cleaned_title = re.sub(r'[\._\-\(\)\[\]]', ' ', cleaned_title)
-        
-        # সব ধরনের ট্যাগ অপসারণের জন্য শক্তিশালী Regex
-        # এই Regex টি সাল, রেজোলিউশন, অডিও/ভিডিও কোডেক, ভাষা, রিলিজ গ্রুপ ইত্যাদি বাদ দেবে।
         tags_regex = r"""
         \b(
-        # Resolutions and Quality Tags
         \d{3,4}p | 4k | 2160p | 1080p | 720p | 480p | 360p | 
         UHD | BluRay | HDRip | WEB-DL | WEBDL | WEBRip | HD-TC | HD-TS | HC | HDCAM | BDRip | DVDScr | DVDRip |
-        # Audio/Video Codecs
         x264 | x265 | h264 | h265 | HEVC | 
         AAC | AC3 | E-AC-3 | DTS |
-        # Language and Audio Tags
         Hindi | English | Tamil | Telugu | Kannada | Malayalam | Korean | Dual[-_]?Audio | Multi[-_]?Audio |
         Eng | Hin | Tam | Tel | Kor |
         Org | Dubbed |
-        # Release Groups and common tags
         YTS | YIFY | Pahe | PSA | ETRG | RARBG | TGx | GalaxyRG | 
         AMZN | NF | DSNP |
-        # Other common tags
         S\d{1,2}(E\d{1,2})? | Season[\s-]?\d{1,2} | Episode[\s-]?\d{1,3} |
         Complete | Uncut | Extended | Final | PROPER | REPACK |
-        \d{4} # Year
+        \d{4}
         )\b
         """
         cleaned_title = re.sub(tags_regex, '', cleaned_title, flags=re.IGNORECASE | re.VERBOSE)
-        
-        # অতিরিক্ত স্পেস পরিষ্কার করুন
         cleaned_title = re.sub(r'\s+', ' ', cleaned_title).strip()
-        
-        # যদি পরিষ্কার করার পর টাইটেল খুব ছোট হয়, তাহলে এটি অকার্যকর
         return cleaned_title if len(cleaned_title) > 2 else None
-        
     except Exception as e:
         print(f"Error extracting title from link {link}: {e}")
         return None
@@ -980,9 +951,8 @@ def extract_size_from_link(link):
     sizes = re.findall(r'(\d+\.?\d*\s*(?:GB|MB))', link, re.IGNORECASE)
     return sizes[0].upper().replace(" ", "") if sizes else "N/A"
 
-
 # ===================================================================
-# === API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য (চূড়ান্ত সংস্করণ) ===
+# === API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য (চূড়ান্ত ও নির্ভরযোগ্য সংস্করণ) ===
 # ===================================================================
 @app.route('/api/add_from_bot', methods=['POST'])
 def add_from_bot():
@@ -999,18 +969,17 @@ def add_from_bot():
     download_link = data.get('link')
     
     # --- ধাপ ৩: TMDb সার্চের জন্য পরিষ্কার টাইটেল প্রস্তুত করা ---
-    # বট যদি নির্দিষ্ট টাইটেল পাঠায়, সেটাই ব্যবহার হবে। নাহলে লিঙ্ক থেকে বের করা হবে।
     search_query_title = data.get('title') or extract_title_from_link(download_link)
-
     if not search_query_title:
         print(f"Could not extract a clean title from link: {download_link}")
-        return {"status": "error", "message": "Could not determine content title. Please provide a title if link parsing fails."}, 400
-
+        return {"status": "error", "message": "Could not determine content title from link."}, 400
+    
     print(f"Cleaned title for TMDb search: '{search_query_title}'")
     
-    # লিঙ্ক থেকে কোয়ালিটি এবং সাইজ অনুমান করা (শুধুমাত্র ডাটাবেসে সেভ করার জন্য)
+    # লিঙ্ক থেকে কোয়ালিটি এবং সাইজ অনুমান করা
     quality = extract_quality_from_link(download_link)
     size = extract_size_from_link(download_link)
+    new_link_entry = {"quality": quality, "size": size, "url": download_link, "label": f"{quality} Download"}
 
     # --- ধাপ ৪: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ ---
     tmdb_data = {}
@@ -1019,16 +988,13 @@ def add_from_bot():
         search_res = requests.get(search_url, timeout=10).json()
         
         if search_res and search_res.get("results"):
-            # সবচেয়ে ভালো ম্যাচটি খোঁজা (মুভিকে অগ্রাধিকার দেওয়া)
             best_match = sorted(search_res["results"], key=lambda x: (x.get('media_type') != 'movie', x.get('popularity', 0)), reverse=True)[0]
-            
             tmdb_id = best_match.get("id")
-            media_type = best_match.get("media_type") # 'movie' or 'tv'
+            media_type = best_match.get("media_type")
 
             if tmdb_id and media_type in ['movie', 'tv']:
                 detail_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
                 res = requests.get(detail_url, timeout=10).json()
-                
                 poster_path = res.get("poster_path") or res.get("backdrop_path")
                 release_date = res.get("release_date") or res.get("first_air_date")
 
@@ -1045,46 +1011,55 @@ def add_from_bot():
                     "original_language": res.get("original_language", "N/A")
                 }
                 print(f"Successfully fetched details for '{tmdb_data['title']}' from TMDb.")
-            else:
-                 print(f"No valid movie/series found on TMDb for '{search_query_title}'.")
-        else:
-            print(f"No results from TMDb for '{search_query_title}'.")
     except Exception as e:
         print(f"Error fetching data from TMDb: {e}")
 
-    # --- ধাপ ৫: ডাটাবেসে সেভ করার জন্য ডেটা প্রস্তুত করা ---
-    # যদি TMDb থেকে কোনো তথ্য না পাওয়া যায়, তবে শুধু লিঙ্ক থেকে পাওয়া তথ্য ব্যবহার করা হবে।
-    if not tmdb_data:
-        tmdb_data = {"title": search_query_title.title(), "type": "movie"} # Default values
-
-    # ডাটাবেসে কন্টেন্ট খোঁজার জন্য ফিল্টার
-    query_filter = {"tmdb_id": tmdb_data.get("tmdb_id")} if tmdb_data.get("tmdb_id") else {"title": tmdb_data["title"], "type": tmdb_data["type"]}
-    existing_content = movies.find_one(query_filter)
-
-    new_link_entry = {"quality": quality, "size": size, "url": download_link, "label": f"{quality} Download"}
-
-    if existing_content:
-        # যদি কন্টেন্ট আগে থেকেই থাকে, তাহলে শুধু নতুন লিঙ্ক যোগ করা হবে
-        print(f"Updating existing content: '{tmdb_data['title']}'")
-        movies.update_one(
-            {"_id": existing_content["_id"]},
-            {
-                "$addToSet": {"links": new_link_entry}, # addToSet ডুপ্লিকেট লিঙ্ক যোগ করবে না
-                "$set": tmdb_data # TMDb থেকে পাওয়া নতুন তথ্য দিয়ে আপডেট করা
-            }
-        )
-        return {"status": "success", "message": f"Added new link to '{tmdb_data['title']}'.", "movie_id": str(existing_content["_id"])}, 200
-    else:
-        # যদি কন্টেন্ট নতুন হয়, তাহলে নতুন এন্ট্রি তৈরি করা হবে
-        print(f"Adding new content: '{tmdb_data['title']}'")
-        new_content = {
-            "quality": "", "top_label": "", "is_trending": False,
-            "is_coming_soon": False, "links": [new_link_entry], "episodes": [],
-            **tmdb_data # TMDb থেকে পাওয়া সব তথ্য যোগ করা
+    # --- ধাপ ৫: ডাটাবেসে তথ্য আপডেট বা নতুন যোগ করা ---
+    if not tmdb_data: # যদি TMDb থেকে কোনো তথ্য না আসে
+        print(f"No data from TMDb. Saving with extracted title: '{search_query_title}'")
+        # TMDb id ছাড়া, টাইটেল দিয়ে ফিল্টার করা হবে
+        query_filter = {"title": search_query_title.title(), "type": "movie"}
+        update_data = {
+            "$setOnInsert": {"title": search_query_title.title(), "type": "movie", "overview": "No overview available."},
+            "$addToSet": {"links": new_link_entry}
         }
-        inserted_id = movies.insert_one(new_content).inserted_id
-        print(f"SUCCESS: Automatically added '{tmdb_data['title']}' to the database. ID: {inserted_id}")
-        return {"status": "success", "message": f"'{tmdb_data['title']}' added successfully.", "movie_id": str(inserted_id)}, 201
+    else: # যদি TMDb থেকে তথ্য পাওয়া যায়
+        print(f"Updating/Inserting content with TMDb data: '{tmdb_data['title']}'")
+        # TMDb id দিয়ে ফিল্টার করা হবে, যা ইউনিক
+        query_filter = {"tmdb_id": tmdb_data["tmdb_id"]}
+        update_data = {
+            # $set: এই ফিল্ডগুলো সবসময় আপডেট হবে (যদি ডকুমেন্ট পাওয়া যায়)
+            # অথবা নতুন ডকুমেন্ট তৈরির সময় সেট হবে।
+            "$set": tmdb_data,
+            # $addToSet: এই অপারেশনটি links অ্যারেতে ডুপ্লিকেট লিঙ্ক যোগ করা থেকে বিরত থাকবে।
+            "$addToSet": {"links": new_link_entry}
+        }
+
+    try:
+        # upsert=True: যদি ডকুমেন্ট পাওয়া যায় তবে আপডেট করবে, না পেলে নতুন তৈরি করবে।
+        result = movies.update_one(query_filter, update_data, upsert=True)
+        
+        if result.upserted_id:
+            message = f"'{tmdb_data.get('title', search_query_title)}' added successfully."
+            status_code = 201
+            movie_id = str(result.upserted_id)
+        elif result.matched_count > 0:
+            message = f"Added new link to '{tmdb_data.get('title', search_query_title)}'."
+            status_code = 200
+            # যেহেতু আইডি জানা নেই, তাই আবার খুঁজে বের করতে হবে
+            doc = movies.find_one(query_filter)
+            movie_id = str(doc['_id']) if doc else None
+        else:
+            message = "An unexpected error occurred during database update."
+            status_code = 500
+            movie_id = None
+            
+        print(f"DB: {message}")
+        return {"status": "success", "message": message, "movie_id": movie_id}, status_code
+
+    except Exception as e:
+        print(f"DATABASE ERROR: Failed to update/insert. Error: {e}")
+        return {"status": "error", "message": "Failed to save to database."}, 500
 
 
 if __name__ == "__main__":
