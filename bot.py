@@ -800,48 +800,29 @@ def admin():
             "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
             "tmdb_id": None,
-            "vote_average": 0.0 # নতুন যোগ করা হয়েছে
+            "vote_average": 0.0
         }
 
         # মুভি লিঙ্ক যোগ করা
         if content_type == 'movie':
             links = []
-            if request.form.get("link_480p"):
-                links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p"), "label": "480p Download"})
-            if request.form.get("link_720p"):
-                links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p"), "label": "720p Download"})
-            if request.form.get("link_1080p"):
-                links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p"), "label": "1080p Download"})
+            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p"), "label": "480p Download"})
+            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p"), "label": "720p Download"})
+            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p"), "label": "1080p Download"})
             movie_data["links"] = links
-            movie_data["episodes"] = [] # মুভি হলে এপিসোড খালি থাকবে
+            movie_data["episodes"] = []
         
         # সিরিজ এপিসোড যোগ করা
         elif content_type == 'series':
-            episodes_data = []
-            episode_numbers = request.form.getlist('episode_number[]')
-            episode_titles = request.form.getlist('episode_title[]')
-            episode_overviews = request.form.getlist('episode_overview[]')
-            episode_link_480p = request.form.getlist('episode_link_480p[]')
-            episode_link_720p = request.form.getlist('episode_link_720p[]')
-            episode_link_1080p = request.form.getlist('episode_link_1080p[]')
-
+            episodes_data, episode_numbers, episode_titles, episode_overviews, episode_link_480p, episode_link_720p, episode_link_1080p = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
             for i in range(len(episode_numbers)):
                 ep_links = []
-                if episode_link_480p[i]:
-                    ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
-                if episode_link_720p[i]:
-                    ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
-                if episode_link_1080p[i]:
-                    ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
-                
-                episodes_data.append({
-                    "episode_number": int(episode_numbers[i]),
-                    "title": episode_titles[i],
-                    "overview": episode_overviews[i],
-                    "links": ep_links
-                })
+                if episode_link_480p[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
+                if episode_link_720p[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
+                if episode_link_1080p[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
+                episodes_data.append({"episode_number": int(episode_numbers[i]), "title": episode_titles[i], "overview": episode_overviews[i], "links": ep_links})
             movie_data["episodes"] = episodes_data
-            movie_data["links"] = [] # সিরিজ হলে মুভি লিঙ্ক খালি থাকবে
+            movie_data["links"] = []
 
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
@@ -874,50 +855,30 @@ def edit_movie(movie_id):
             "poster": request.form.get("poster_url", ""), "year": request.form.get("year", "N/A"),
             "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
-            "vote_average": float(request.form.get("vote_average", 0.0)) # নতুন যোগ করা হয়েছে
+            "vote_average": float(movie_obj.get("vote_average", 0.0))
         }
 
         if content_type == 'movie':
             links = []
-            if request.form.get("link_480p"):
-                links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p"), "label": "480p Download"})
-            if request.form.get("link_720p"):
-                links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p"), "label": "720p Download"})
-            if request.form.get("link_1080p"):
-                links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p"), "label": "1080p Download"})
+            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p"), "label": "480p Download"})
+            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p"), "label": "720p Download"})
+            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p"), "label": "1080p Download"})
             updated_data["links"] = links
-            updated_data["episodes"] = [] # মুভি হলে এপিসোড খালি থাকবে
+            updated_data["episodes"] = []
         elif content_type == 'series':
-            episodes_data = []
-            episode_numbers = request.form.getlist('episode_number[]')
-            episode_titles = request.form.getlist('episode_title[]')
-            episode_overviews = request.form.getlist('episode_overview[]')
-            episode_link_480p = request.form.getlist('episode_link_480p[]')
-            episode_link_720p = request.form.getlist('episode_link_720p[]')
-            episode_link_1080p = request.form.getlist('episode_link_1080p[]')
-
+            episodes_data, episode_numbers, episode_titles, episode_overviews, episode_link_480p, episode_link_720p, episode_link_1080p = [], request.form.getlist('episode_number[]'), request.form.getlist('episode_title[]'), request.form.getlist('episode_overview[]'), request.form.getlist('episode_link_480p[]'), request.form.getlist('episode_link_720p[]'), request.form.getlist('episode_link_1080p[]')
             for i in range(len(episode_numbers)):
                 ep_links = []
-                if episode_link_480p[i]:
-                    ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
-                if episode_link_720p[i]:
-                    ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
-                if episode_link_1080p[i]:
-                    ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
-                
-                episodes_data.append({
-                    "episode_number": int(episode_numbers[i]),
-                    "title": episode_titles[i],
-                    "overview": episode_overviews[i],
-                    "links": ep_links
-                })
+                if episode_link_480p[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i], "label": "480p Download"})
+                if episode_link_720p[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i], "label": "720p Download"})
+                if episode_link_1080p[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i], "label": "1080p Download"})
+                episodes_data.append({"episode_number": int(episode_numbers[i]), "title": episode_titles[i], "overview": episode_overviews[i], "links": ep_links})
             updated_data["episodes"] = episodes_data
-            updated_data["links"] = [] # সিরিজ হলে মুভি লিঙ্ক খালি থাকবে
+            updated_data["links"] = []
 
         movies.update_one({"_id": ObjectId(movie_id)}, {"$set": updated_data})
         return redirect(url_for('admin'))
     
-    # ObjectId কে স্ট্রিং এ রূপান্তর করে টেমপ্লেটে পাঠানো
     movie_obj['_id'] = str(movie_obj['_id'])
     return render_template_string(edit_html, movie=movie_obj)
 
@@ -938,101 +899,96 @@ def render_full_list(content_list, title):
     
 @app.route('/trending_movies')
 def trending_movies():
-    trending_list = list(movies.find({"quality": "TRENDING"}).sort('_id', -1))
-    return render_full_list(trending_list, "Trending Now")
+    return render_full_list(list(movies.find({"quality": "TRENDING"}).sort('_id', -1)), "Trending Now")
 
 @app.route('/movies_only')
 def movies_only():
-    movie_list = list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1))
-    return render_full_list(movie_list, "All Movies")
+    return render_full_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Movies")
 
 @app.route('/webseries')
 def webseries():
-    series_list = list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1))
-    return render_full_list(series_list, "All Web Series")
+    return render_full_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Web Series")
 
 @app.route('/coming_soon')
 def coming_soon():
-    coming_soon_list = list(movies.find({"is_coming_soon": True}).sort('_id', -1))
-    return render_full_list(coming_soon_list, "Coming Soon")
+    return render_full_list(list(movies.find({"is_coming_soon": True}).sort('_id', -1)), "Coming Soon")
 
 @app.route('/recently_added')
 def recently_added_all():
-    all_recent_content = list(movies.find().sort('_id', -1))
-    return render_full_list(all_recent_content, "Recently Added")
+    return render_full_list(list(movies.find().sort('_id', -1)), "Recently Added")
 
 # ===================================================================
 # === চূড়ান্ত ইউটিলিটি ফাংশন: লিঙ্ক থেকে টাইটেল, কোয়ালিটি, সাইজ অনুমান করার জন্য ===
 # ===================================================================
 def extract_title_from_link(link):
+    """
+    এই ফাংশনটি একটি ডাউনলোড লিঙ্ক থেকে অপ্রয়োজনীয় ট্যাগ (যেমন সাল, কোয়ালিটি, ভাষা) বাদ দিয়ে 
+    শুধুমাত্র মুভি বা সিরিজের আসল টাইটেলটি বের করার চেষ্টা করে।
+    """
     try:
-        # URL থেকে ফাইলের নাম বের করা
-        filename = link.split('/')[-1]
+        filename = link.split('/')[-1].replace('%20', ' ')
+        # প্রথমে ফাইল এক্সটেনশন বাদ দিন
+        cleaned_title = re.sub(r'\.(mkv|mp4|avi|mov|webm|flv|wmv|srt|zip|rar)$', '', filename, flags=re.IGNORECASE)
         
-        # এক্সটেনশন অপসারণ (mp4, mkv, avi, webm, m3u8, rar, zip)
-        cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8|rar|zip|zipx)$', '', filename, flags=re.IGNORECASE)
+        # সাধারণ বিভাজকগুলিকে স্পেস দিয়ে প্রতিস্থাপন করুন
+        cleaned_title = re.sub(r'[\._\-\(\)\[\]]', ' ', cleaned_title)
         
-        # অপ্রয়োজনীয় ট্যাগ, সাল, রিলিজ গ্রুপ, কোয়ালিটি, ভাষা ইত্যাদি অপসারণের জন্য শক্তিশালী Regex
-        # লক্ষ্য: শুধু মুভির আসল টাইটেলটি বের করা, অন্য কিছু নয়।
-        cleaned_filename = re.sub(
-            r'\b(?:'
-            r'(?:HD)?CAM|TS|WEB-DL|WEBRip|BluRay|BDRip|HDRip|DVDRip|DVDScr|HDTV|Rip|HC|LINE|DDP|AAC|x264|x265|H264|H265|xvid|divx|AC3|EAC3|DTS|FLAC|MP3|WEBCAP|VO|DUB|SUB|MULTi|Dual|ITA|ENG|HINDI|ORG|TAMIL|TELUGU|KOREAN|SPANISH|FRENCH|GERMAN|JAPANESE|CHINESE|RUSSIAN|NORDIC|FLEMISH|DUTCH|SWEDISH|DANISH|NORWEGIAN|FINNISH|PORTUGUESE|ARABIC|TURKISH|PERSIAN|HEBREW|MULTI-AUDIO|DUBBED|SUBBED' # Quality/Codec/Audio/Lang
-            r'|\d{3,4}p(?:\.\w+)?' # Resolutions like 720p, 1080p.web
-            r'|ETRG|YTS|RARBG|GECKOS|ION10|NTB|ESub|AMZN|NF|FLX|WEB|DDP|DSNP|iExE|FGT|PSA|TGx|MRCS|ViP|Couchpotato|CtrlHD|DON|GalaxyRG|MkvCage|Pahe|Ozlem|EVO|MeGusta|xpost|mkv|mov|mp4' # Release groups/tags and common file extensions within filename
-            r'|season\s*\d+|series|movie|complete|S\d{1,2}E\d{1,2}|S\d{1,2}|E\d{1,2}' # Season/Episode tags
-            r'|final|extended|uncut|remastered|director(?:\'?s)?\s*cut|unrated|theatrical|collector(?:\'?s)?\s*edition|part\s*\d+' # Version/Part tags
-            r'|x264-[A-Za-z0-9]+|x265-[A-Za-z0-9]+' # Specific codec-group tags
-            r'|PROPER|REPACK|RERiP|FIXED|LiMiTED|DOCU|CONCERT|LIVE|TV|WEB' # Other common tags
-            r'|[+_-]\s*(?:HIN|ENG|TAM|TEL|Multi-Audio|Dual-Audio|Hindi|English|Tamil|Telugu|Korean|Japanese)\s*[+_-]?' # Specific language combinations with +, - or _
-            r'|\s*(?:\[\d{4}\])|\s*(?:\(\d{4}\))\s*$' # [Year] or (Year) at the end, with optional spaces
-            r'|\s*\d{4}\s*$' # Year only at the end (e.g. 'Movie Title 2023')
-            r'|\s+\b(?:film|movie|show|series|full)\b' # Common words like 'film', 'movie' etc.
-            r'|[._-]' # Any remaining dots, underscores, hyphens
-            r')\b',
-            '',
-            cleaned_filename,
-            flags=re.IGNORECASE
-        ).strip()
+        # সব ধরনের ট্যাগ অপসারণের জন্য শক্তিশালী Regex
+        # এই Regex টি সাল, রেজোলিউশন, অডিও/ভিডিও কোডেক, ভাষা, রিলিজ গ্রুপ ইত্যাদি বাদ দেবে।
+        tags_regex = r"""
+        \b(
+        # Resolutions and Quality Tags
+        \d{3,4}p | 4k | 2160p | 1080p | 720p | 480p | 360p | 
+        UHD | BluRay | HDRip | WEB-DL | WEBDL | WEBRip | HD-TC | HD-TS | HC | HDCAM | BDRip | DVDScr | DVDRip |
+        # Audio/Video Codecs
+        x264 | x265 | h264 | h265 | HEVC | 
+        AAC | AC3 | E-AC-3 | DTS |
+        # Language and Audio Tags
+        Hindi | English | Tamil | Telugu | Kannada | Malayalam | Korean | Dual[-_]?Audio | Multi[-_]?Audio |
+        Eng | Hin | Tam | Tel | Kor |
+        Org | Dubbed |
+        # Release Groups and common tags
+        YTS | YIFY | Pahe | PSA | ETRG | RARBG | TGx | GalaxyRG | 
+        AMZN | NF | DSNP |
+        # Other common tags
+        S\d{1,2}(E\d{1,2})? | Season[\s-]?\d{1,2} | Episode[\s-]?\d{1,3} |
+        Complete | Uncut | Extended | Final | PROPER | REPACK |
+        \d{4} # Year
+        )\b
+        """
+        cleaned_title = re.sub(tags_regex, '', cleaned_title, flags=re.IGNORECASE | re.VERBOSE)
         
-        # একাধিক স্পেস থাকলে একটি স্পেস দিয়ে প্রতিস্থাপন
-        cleaned_filename = re.sub(r'\s+', ' ', cleaned_filename).strip()
-
-        # যদি পরিষ্কার করার পর টাইটেল খুব ছোট হয় বা শুধু সংখ্যা থাকে, তাহলে এটি অকার্যকর
-        if len(cleaned_filename) < 2 or cleaned_filename.isdigit(): 
-            return None
-        return cleaned_filename if cleaned_filename else None
+        # অতিরিক্ত স্পেস পরিষ্কার করুন
+        cleaned_title = re.sub(r'\s+', ' ', cleaned_title).strip()
+        
+        # যদি পরিষ্কার করার পর টাইটেল খুব ছোট হয়, তাহলে এটি অকার্যকর
+        return cleaned_title if len(cleaned_title) > 2 else None
+        
     except Exception as e:
         print(f"Error extracting title from link {link}: {e}")
         return None
 
 def extract_quality_from_link(link):
-    # এই ফাংশনটি কোয়ালিটি বের করবে, যা TMDb সার্চের জন্য সরাসরি ব্যবহার হবে না
-    # তবে ডাউনলোড লিংকের লেবেলে বা অন্যান্য অভ্যন্তরীণ প্রয়োজনে ব্যবহার করা যেতে পারে।
     qualities = re.findall(r'(\d{3,4}p|HD|FHD|UHD|4K)', link, re.IGNORECASE)
     if qualities:
         for q in ['2160p', '1080p', '720p', '480p', 'HD', 'FHD', 'UHD', '4K']:
-            if q.lower() in [s.lower() for s in qualities]:
-                return q.upper()
+            if q.lower() in [s.lower() for s in qualities]: return q.upper()
         return qualities[0].upper()
     return "N/A"
 
 def extract_size_from_link(link):
-    # এই ফাংশনটি সাইজ বের করবে, যা TMDb সার্চের জন্য সরাসরি ব্যবহার হবে না
-    # তবে ডাউনলোড লিংকের লেবেলে বা অন্যান্য অভ্যন্তরীণ প্রয়োজনে ব্যবহার করা যেতে পারে।
     sizes = re.findall(r'(\d+\.?\d*\s*(?:GB|MB))', link, re.IGNORECASE)
-    if sizes:
-        return sizes[0].upper().replace(" ", "")
-    return "N/A"
+    return sizes[0].upper().replace(" ", "") if sizes else "N/A"
+
 
 # ===================================================================
-# === API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য ===
+# === API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য (চূড়ান্ত সংস্করণ) ===
 # ===================================================================
 @app.route('/api/add_from_bot', methods=['POST'])
 def add_from_bot():
     # --- ধাপ ১: নিরাপত্তা যাচাই ---
-    bot_key_header = request.headers.get('X-Bot-Secret-Key')
-    if not bot_key_header or bot_key_header != BOT_SECRET_KEY:
-        print(f"Unauthorized attempt to access bot API. Key used: {bot_key_header}")
+    if request.headers.get('X-Bot-Secret-Key') != BOT_SECRET_KEY:
+        print(f"Unauthorized bot API attempt. Key: {request.headers.get('X-Bot-Secret-Key')}")
         return {"status": "error", "message": "Unauthorized"}, 401
 
     # --- ধাপ ২: বট থেকে পাঠানো JSON ডেটা গ্রহণ ---
@@ -1042,190 +998,93 @@ def add_from_bot():
 
     download_link = data.get('link')
     
-    # বট থেকে যদি নির্দিষ্ট টাইটেল পাঠানো হয়, তবে সেটাই ব্যবহার করবে।
-    # অন্যথায়, লিঙ্ক থেকে অনুমান করবে।
-    input_title = data.get('title') 
+    # --- ধাপ ৩: TMDb সার্চের জন্য পরিষ্কার টাইটেল প্রস্তুত করা ---
+    # বট যদি নির্দিষ্ট টাইটেল পাঠায়, সেটাই ব্যবহার হবে। নাহলে লিঙ্ক থেকে বের করা হবে।
+    search_query_title = data.get('title') or extract_title_from_link(download_link)
 
-    # যদি বট থেকে টাইটেল না আসে, লিঙ্ক থেকে অনুমান করবে
-    # extract_title_from_link থেকে পরিষ্কার টাইটেল আসবে
-    if not input_title: 
-        input_title = extract_title_from_link(download_link)
-        if not input_title:
-            print(f"Could not extract initial title from link: {download_link}")
-            return {"status": "error", "message": "Could not determine content title from link. Please provide 'title' parameter if link extraction fails."}, 400
+    if not search_query_title:
+        print(f"Could not extract a clean title from link: {download_link}")
+        return {"status": "error", "message": "Could not determine content title. Please provide a title if link parsing fails."}, 400
 
-    # কোয়ালিটি এবং সাইজ লিঙ্ক থেকে অনুমান করবে (এগুলো TMDb সার্চে ব্যবহার হবে না, শুধু ডাটাবেসে সেভ হবে)
+    print(f"Cleaned title for TMDb search: '{search_query_title}'")
+    
+    # লিঙ্ক থেকে কোয়ালিটি এবং সাইজ অনুমান করা (শুধুমাত্র ডাটাবেসে সেভ করার জন্য)
     quality = extract_quality_from_link(download_link)
     size = extract_size_from_link(download_link)
 
-    print(f"Received from bot: Initial Title='{input_title}', Quality='{quality}', Size='{size}', Link='{download_link}'")
-
-    # --- ধাপ ৩: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ (পরিষ্কার টাইটেল ব্যবহার করে) ---
-    tmdb_title = input_title 
-    overview = "No overview available."
-    poster = ""
-    year = "N/A"
-    genres = []
-    release_date = ""
-    tmdb_id = None
-    actual_content_type = "movie" # ডিফল্ট হিসাবে মুভি
-    vote_average = 0.0
-    original_language = "N/A"
-
+    # --- ধাপ ৪: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ ---
+    tmdb_data = {}
     try:
-        # TMDb সার্চের জন্য সরাসরি extract_title_from_link থেকে প্রাপ্ত টাইটেল ব্যবহার
-        search_query_title = input_title 
-
-        print(f"Searching TMDb for: '{search_query_title}'")
         search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={requests.utils.quote(search_query_title)}&include_adult=false"
         search_res = requests.get(search_url, timeout=10).json()
         
         if search_res and search_res.get("results"):
-            tmdb_result = None
-            # ফলাফলের মধ্যে থেকে টাইটেল এবং সম্ভাব্য বছরের উপর ভিত্তি করে সবচেয়ে প্রাসঙ্গিক এন্ট্রি খোঁজা
-            best_match_score = -1
+            # সবচেয়ে ভালো ম্যাচটি খোঁজা (মুভিকে অগ্রাধিকার দেওয়া)
+            best_match = sorted(search_res["results"], key=lambda x: (x.get('media_type') != 'movie', x.get('popularity', 0)), reverse=True)[0]
             
-            for res_item in search_res["results"]:
-                item_title = res_item.get("title") or res_item.get("name")
-                if item_title:
-                    # টাইটেলে সার্চ কোয়েরি আছে কিনা এবং টাইটেলের দৈর্ঘ্য কাছাকাছি কিনা তা পরীক্ষা
-                    current_score = 0
-                    if search_query_title.lower() in item_title.lower():
-                        current_score += 10 # টাইটেল সাবস্ট্রিং হিসেবে থাকলে বেশি স্কোর
-                    
-                    # যদি সম্পূর্ণ টাইটেল ম্যাচ করে
-                    if search_query_title.lower() == item_title.lower():
-                        current_score += 20 # এক্সাক্ট ম্যাচকে সবচেয়ে বেশি অগ্রাধিকার
+            tmdb_id = best_match.get("id")
+            media_type = best_match.get("media_type") # 'movie' or 'tv'
 
-                    # টাইটেলের দৈর্ঘ্যের কাছাকাছি হলে
-                    len_diff = abs(len(search_query_title) - len(item_title))
-                    if len_diff <= 5: # 5 অক্ষরের মধ্যে পার্থক্য থাকলে
-                        current_score += (5 - len_diff) # কম পার্থক্যে বেশি স্কোর
-
-                    # media_type এর উপর ভিত্তি করে স্কোর
-                    if res_item.get("media_type") == "movie":
-                        current_score += 5
-                    elif res_item.get("media_type") == "tv":
-                        current_score += 3 # মুভিকে সামান্য বেশি অগ্রাধিকার
-
-                    if current_score > best_match_score:
-                        best_match_score = current_score
-                        tmdb_result = res_item
-            
-            if tmdb_result:
-                tmdb_id = tmdb_result.get("id")
-                actual_content_type = "movie" if tmdb_result.get("media_type") == "movie" else "series"
-
-                detail_url = f"https://api.themoviedb.org/3/{tmdb_result.get('media_type')}/{tmdb_id}?api_key={TMDB_API_KEY}"
+            if tmdb_id and media_type in ['movie', 'tv']:
+                detail_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
                 res = requests.get(detail_url, timeout=10).json()
                 
-                tmdb_title = res.get("title") or res.get("name") or input_title 
-                overview = res.get("overview", overview)
-                
-                if res.get("poster_path"):
-                    poster = f"https://image.tmdb.org/t/p/w400{res['poster_path']}"
-                elif res.get("backdrop_path"): 
-                    poster = f"https://image.tmdb.org/t/p/w400{res['backdrop_path']}"
-                
+                poster_path = res.get("poster_path") or res.get("backdrop_path")
                 release_date = res.get("release_date") or res.get("first_air_date")
-                if release_date:
-                    year = release_date[:4]
-                
-                if res.get("genres"):
-                    genres = [g['name'] for g in res['genres']]
-                
-                vote_average = res.get("vote_average", 0.0)
-                original_language = res.get("original_language", "N/A")
 
-                print(f"Successfully fetched details for '{tmdb_title}' from TMDb (Type: {actual_content_type}).")
+                tmdb_data = {
+                    "tmdb_id": tmdb_id,
+                    "title": res.get("title") or res.get("name"),
+                    "overview": res.get("overview", "No overview available."),
+                    "poster": f"https://image.tmdb.org/t/p/w400{poster_path}" if poster_path else "",
+                    "year": release_date[:4] if release_date else "N/A",
+                    "release_date": release_date or "",
+                    "genres": [g['name'] for g in res.get('genres', [])],
+                    "type": "series" if media_type == 'tv' else "movie",
+                    "vote_average": res.get("vote_average", 0.0),
+                    "original_language": res.get("original_language", "N/A")
+                }
+                print(f"Successfully fetched details for '{tmdb_data['title']}' from TMDb.")
             else:
-                print(f"No highly relevant movie/series found on TMDb for '{search_query_title}'. Using extracted title and default values.")
-
-    except requests.exceptions.Timeout:
-        print(f"TMDb API request timed out for '{search_query_title}'. Using extracted title and default values.")
-    except requests.exceptions.RequestException as e:
-        print(f"Error making TMDb API request for '{search_query_title}': {e}. Using extracted title and default values.")
+                 print(f"No valid movie/series found on TMDb for '{search_query_title}'.")
+        else:
+            print(f"No results from TMDb for '{search_query_title}'.")
     except Exception as e:
-        print(f"General error fetching data from TMDb for '{search_query_title}': {e}. Using extracted title and default values.")
+        print(f"Error fetching data from TMDb: {e}")
 
-    # --- ধাপ ৪: ডাটাবেসে সেভ করার জন্য ডেটা প্রস্তুত করা ---
-    # TMDb ID থাকলে সেটাই মূল ফিল্টার হিসেবে ব্যবহার করা হবে, কারণ এটি ইউনিক।
-    # না থাকলে টাইটেল এবং টাইপ ব্যবহার করা হবে।
-    query_filter = {"tmdb_id": tmdb_id, "type": actual_content_type} if tmdb_id else {"title": tmdb_title, "type": actual_content_type}
+    # --- ধাপ ৫: ডাটাবেসে সেভ করার জন্য ডেটা প্রস্তুত করা ---
+    # যদি TMDb থেকে কোনো তথ্য না পাওয়া যায়, তবে শুধু লিঙ্ক থেকে পাওয়া তথ্য ব্যবহার করা হবে।
+    if not tmdb_data:
+        tmdb_data = {"title": search_query_title.title(), "type": "movie"} # Default values
 
+    # ডাটাবেসে কন্টেন্ট খোঁজার জন্য ফিল্টার
+    query_filter = {"tmdb_id": tmdb_data.get("tmdb_id")} if tmdb_data.get("tmdb_id") else {"title": tmdb_data["title"], "type": tmdb_data["type"]}
     existing_content = movies.find_one(query_filter)
 
-    # লিঙ্কটি নতুন একটি এন্ট্রি হিসেবে যোগ করা হবে
-    # কোয়ালিটি এবং সাইজ এখানে লিঙ্ক থেকে পাওয়া মান ব্যবহার করবে, TMDb থেকে নয়।
     new_link_entry = {"quality": quality, "size": size, "url": download_link, "label": f"{quality} Download"}
 
     if existing_content:
-        print(f"Updating existing content: '{tmdb_title}' (ID: {existing_content['_id']})")
-        
-        link_exists = False
-        existing_links = existing_content.get("links", [])
-        for link_item in existing_links:
-            if link_item.get("url") == download_link: 
-                link_exists = True
-                break
-        
-        if not link_exists:
-            # নিশ্চিত করুন যে 'links' ফিল্ড আছে, না থাকলে খালি লিস্ট দিয়ে শুরু করুন
-            if "links" not in existing_content:
-                existing_content["links"] = []
-            
-            existing_content["links"].append(new_link_entry)
-            
-            # TMDb থেকে পাওয়া তথ্য দিয়ে বিদ্যমান এন্ট্রি আপডেট করুন
-            movies.update_one(
-                {"_id": existing_content["_id"]},
-                {"$set": {
-                    "links": existing_content["links"],
-                    "overview": overview,
-                    "poster": poster, 
-                    "year": year,
-                    "release_date": release_date,
-                    "genres": genres,
-                    "original_language": original_language,
-                    "tmdb_id": tmdb_id,
-                    "title": tmdb_title, # TMDb থেকে পাওয়া পরিষ্কার টাইটেল দিয়ে আপডেট করুন
-                    "type": actual_content_type, 
-                    "vote_average": vote_average
-                }}
-            )
-            print(f"Added new link ({quality}) to existing content '{tmdb_title}'.")
-            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{tmdb_title}'.", "movie_id": str(existing_content["_id"])}, 200
-        else:
-            print(f"Link '{download_link}' already exists for '{tmdb_title}'. Skipping.")
-            return {"status": "info", "message": f"Link already exists for '{tmdb_title}'. Skipping.", "movie_id": str(existing_content["_id"])}, 200
+        # যদি কন্টেন্ট আগে থেকেই থাকে, তাহলে শুধু নতুন লিঙ্ক যোগ করা হবে
+        print(f"Updating existing content: '{tmdb_data['title']}'")
+        movies.update_one(
+            {"_id": existing_content["_id"]},
+            {
+                "$addToSet": {"links": new_link_entry}, # addToSet ডুপ্লিকেট লিঙ্ক যোগ করবে না
+                "$set": tmdb_data # TMDb থেকে পাওয়া নতুন তথ্য দিয়ে আপডেট করা
+            }
+        )
+        return {"status": "success", "message": f"Added new link to '{tmdb_data['title']}'.", "movie_id": str(existing_content["_id"])}, 200
     else:
-        print(f"Adding new content: '{tmdb_title}' (Type: {actual_content_type})")
+        # যদি কন্টেন্ট নতুন হয়, তাহলে নতুন এন্ট্রি তৈরি করা হবে
+        print(f"Adding new content: '{tmdb_data['title']}'")
         new_content = {
-            "title": tmdb_title, # TMDb থেকে পাওয়া পরিষ্কার টাইটেল ব্যবহার করুন
-            "type": actual_content_type, 
-            "quality": quality, # TMDb থেকে নির্দিষ্ট কোয়ালিটি না পেলে, লিংক থেকে পাওয়া কোয়ালিটি ব্যবহার করুন
-            "top_label": "", 
-            "is_trending": False,
-            "is_coming_soon": False,
-            "overview": overview,
-            "poster": poster, 
-            "year": year,
-            "release_date": release_date,
-            "genres": genres,
-            "original_language": original_language,
-            "links": [new_link_entry], # নতুন কন্টেন্টের জন্য লিঙ্ক
-            "episodes": [], # নতুন কন্টেন্ট হলে এপিসোড খালি থাকবে
-            "tmdb_id": tmdb_id,
-            "vote_average": vote_average
+            "quality": "", "top_label": "", "is_trending": False,
+            "is_coming_soon": False, "links": [new_link_entry], "episodes": [],
+            **tmdb_data # TMDb থেকে পাওয়া সব তথ্য যোগ করা
         }
-        
-        try:
-            inserted_id = movies.insert_one(new_content).inserted_id
-            print(f"SUCCESS: Automatically added '{tmdb_title}' to the database via bot. New ID: {inserted_id}")
-            return {"status": "success", "message": f"'{tmdb_title}' added successfully.", "movie_id": str(inserted_id)}, 201
-        except Exception as e:
-            print(f"DATABASE ERROR: Failed to insert '{tmdb_title}'. Error: {e}")
-            return {"status": "error", "message": "Failed to save to database."}, 500
+        inserted_id = movies.insert_one(new_content).inserted_id
+        print(f"SUCCESS: Automatically added '{tmdb_data['title']}' to the database. ID: {inserted_id}")
+        return {"status": "success", "message": f"'{tmdb_data['title']}' added successfully.", "movie_id": str(inserted_id)}, 201
 
 
 if __name__ == "__main__":
