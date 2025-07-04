@@ -970,34 +970,31 @@ def extract_title_from_link(link):
         filename = link.split('/')[-1]
         
         # এক্সটেনশন অপসারণ (mp4, mkv, avi, webm, m3u8, rar, zip)
-        # অতিরিক্ত নিরাপত্তা হিসাবে কেস-ইনসেনসিটিভ
-        cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8|rar|zip)$', '', filename, flags=re.IGNORECASE)
+        cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8|rar|zip|zipx)$', '', filename, flags=re.IGNORECASE)
         
-        # বিভিন্ন রিলিজ গ্রুপ, কোয়ালিটি, কোডেক, ভাষা ট্যাগ, অতিরিক্ত শব্দ ইত্যাদি অপসারণ
-        # এই regex প্যাটার্নটি সর্বোচ্চ নির্ভুলতার জন্য ডিজাইন করা হয়েছে।
-        # এটি নিশ্চিত করবে যে 'NF WEB-DL HIN + ENG + TAM + TEL 720P' এর মতো অংশগুলো সম্পূর্ণরূপে বাদ যায়।
+        # অপ্রয়োজনীয় ট্যাগ, সাল, রিলিজ গ্রুপ, কোয়ালিটি, ভাষা ইত্যাদি অপসারণের জন্য শক্তিশালী Regex
+        # লক্ষ্য: শুধু মুভির আসল টাইটেলটি বের করা, অন্য কিছু নয়।
         cleaned_filename = re.sub(
             r'\b(?:'
             r'(?:HD)?CAM|TS|WEB-DL|WEBRip|BluRay|BDRip|HDRip|DVDRip|DVDScr|HDTV|Rip|HC|LINE|DDP|AAC|x264|x265|H264|H265|xvid|divx|AC3|EAC3|DTS|FLAC|MP3|WEBCAP|VO|DUB|SUB|MULTi|Dual|ITA|ENG|HINDI|ORG|TAMIL|TELUGU|KOREAN|SPANISH|FRENCH|GERMAN|JAPANESE|CHINESE|RUSSIAN|NORDIC|FLEMISH|DUTCH|SWEDISH|DANISH|NORWEGIAN|FINNISH|PORTUGUESE|ARABIC|TURKISH|PERSIAN|HEBREW|MULTI-AUDIO|DUBBED|SUBBED' # Quality/Codec/Audio/Lang
             r'|\d{3,4}p(?:\.\w+)?' # Resolutions like 720p, 1080p.web
-            r'|\b\d{4}\b(?!\s*(?:film|movie|series|season|episode|part|s\d|e\d))\b' # Year, but not if it's part of a title or season/episode tag
             r'|ETRG|YTS|RARBG|GECKOS|ION10|NTB|ESub|AMZN|NF|FLX|WEB|DDP|DSNP|iExE|FGT|PSA|TGx|MRCS|ViP|Couchpotato|CtrlHD|DON|GalaxyRG|MkvCage|Pahe|Ozlem|EVO|MeGusta|xpost|mkv|mov|mp4' # Release groups/tags and common file extensions within filename
             r'|season\s*\d+|series|movie|complete|S\d{1,2}E\d{1,2}|S\d{1,2}|E\d{1,2}' # Season/Episode tags
             r'|final|extended|uncut|remastered|director(?:\'?s)?\s*cut|unrated|theatrical|collector(?:\'?s)?\s*edition|part\s*\d+' # Version/Part tags
             r'|x264-[A-Za-z0-9]+|x265-[A-Za-z0-9]+' # Specific codec-group tags
             r'|PROPER|REPACK|RERiP|FIXED|LiMiTED|DOCU|CONCERT|LIVE|TV|WEB' # Other common tags
             r'|[+_-]\s*(?:HIN|ENG|TAM|TEL|Multi-Audio|Dual-Audio|Hindi|English|Tamil|Telugu|Korean|Japanese)\s*[+_-]?' # Specific language combinations with +, - or _
-            r'|\s*\(\d{4}\)$' # (Year) at the end of the title
+            r'|\s*(?:\[\d{4}\])|\s*(?:\(\d{4}\))\s*$' # [Year] or (Year) at the end, with optional spaces
+            r'|\s*\d{4}\s*$' # Year only at the end (e.g. 'Movie Title 2023')
+            r'|\s+\b(?:film|movie|show|series|full)\b' # Common words like 'film', 'movie' etc.
+            r'|[._-]' # Any remaining dots, underscores, hyphens
             r')\b',
             '',
             cleaned_filename,
             flags=re.IGNORECASE
         ).strip()
         
-        # অতিরিক্ত ডট, হাইফেন, আন্ডারস্কোরকে স্পেস দিয়ে প্রতিস্থাপন
-        cleaned_filename = re.sub(r'[._-]', ' ', cleaned_filename)
-        
-        # অতিরিক্ত স্পেস অপসারণ
+        # একাধিক স্পেস থাকলে একটি স্পেস দিয়ে প্রতিস্থাপন
         cleaned_filename = re.sub(r'\s+', ' ', cleaned_filename).strip()
 
         # যদি পরিষ্কার করার পর টাইটেল খুব ছোট হয় বা শুধু সংখ্যা থাকে, তাহলে এটি অকার্যকর
@@ -1009,24 +1006,23 @@ def extract_title_from_link(link):
         return None
 
 def extract_quality_from_link(link):
-    # কোয়ালিটি যেমন 720p, 1080p, 2160p, HD, FHD, UHD, 4K
+    # এই ফাংশনটি কোয়ালিটি বের করবে, যা TMDb সার্চের জন্য সরাসরি ব্যবহার হবে না
+    # তবে ডাউনলোড লিংকের লেবেলে বা অন্যান্য অভ্যন্তরীণ প্রয়োজনে ব্যবহার করা যেতে পারে।
     qualities = re.findall(r'(\d{3,4}p|HD|FHD|UHD|4K)', link, re.IGNORECASE)
     if qualities:
-        # যদি একাধিক কোয়ালিটি পাওয়া যায়, সবচেয়ে বড়টা বা প্রথমটা নেওয়া
-        # সংখ্যাসূচক কোয়ালিটি অগ্রাধিকার পাবে
         for q in ['2160p', '1080p', '720p', '480p', 'HD', 'FHD', 'UHD', '4K']:
             if q.lower() in [s.lower() for s in qualities]:
                 return q.upper()
-        return qualities[0].upper() # যদি নির্দিষ্ট কোনোটা না পাওয়া যায়, প্রথমটা
-    return "N/A" # কিছু পাওয়া না গেলে ডিফল্ট
+        return qualities[0].upper()
+    return "N/A"
 
 def extract_size_from_link(link):
-    # সাইজ যেমন 1.5GB, 700MB (দশমিক সংখ্যা সহ)
+    # এই ফাংশনটি সাইজ বের করবে, যা TMDb সার্চের জন্য সরাসরি ব্যবহার হবে না
+    # তবে ডাউনলোড লিংকের লেবেলে বা অন্যান্য অভ্যন্তরীণ প্রয়োজনে ব্যবহার করা যেতে পারে।
     sizes = re.findall(r'(\d+\.?\d*\s*(?:GB|MB))', link, re.IGNORECASE)
     if sizes:
-        # একাধিক সাইজ থাকলে প্রথমটি নেওয়া
-        return sizes[0].upper().replace(" ", "") # স্পেস সরিয়ে দেওয়া
-    return "N/A" # কিছু পাওয়া না গেলে ডিফল্ট
+        return sizes[0].upper().replace(" ", "")
+    return "N/A"
 
 # ===================================================================
 # === API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য ===
@@ -1051,13 +1047,14 @@ def add_from_bot():
     input_title = data.get('title') 
 
     # যদি বট থেকে টাইটেল না আসে, লিঙ্ক থেকে অনুমান করবে
+    # extract_title_from_link থেকে পরিষ্কার টাইটেল আসবে
     if not input_title: 
         input_title = extract_title_from_link(download_link)
         if not input_title:
             print(f"Could not extract initial title from link: {download_link}")
             return {"status": "error", "message": "Could not determine content title from link. Please provide 'title' parameter if link extraction fails."}, 400
 
-    # কোয়ালিটি এবং সাইজ লিঙ্ক থেকে অনুমান করবে
+    # কোয়ালিটি এবং সাইজ লিঙ্ক থেকে অনুমান করবে (এগুলো TMDb সার্চে ব্যবহার হবে না, শুধু ডাটাবেসে সেভ হবে)
     quality = extract_quality_from_link(download_link)
     size = extract_size_from_link(download_link)
 
@@ -1086,8 +1083,6 @@ def add_from_bot():
         if search_res and search_res.get("results"):
             tmdb_result = None
             # ফলাফলের মধ্যে থেকে টাইটেল এবং সম্ভাব্য বছরের উপর ভিত্তি করে সবচেয়ে প্রাসঙ্গিক এন্ট্রি খোঁজা
-            # এখানে টাইটেল ম্যাচিং লজিকটি TMDb এর ফলাফলকে input_title এর সাথে আরও ভালোভাবে তুলনা করে।
-            # exact match অথবা closest match খোঁজা হবে।
             best_match_score = -1
             
             for res_item in search_res["results"]:
@@ -1160,6 +1155,8 @@ def add_from_bot():
 
     existing_content = movies.find_one(query_filter)
 
+    # লিঙ্কটি নতুন একটি এন্ট্রি হিসেবে যোগ করা হবে
+    # কোয়ালিটি এবং সাইজ এখানে লিঙ্ক থেকে পাওয়া মান ব্যবহার করবে, TMDb থেকে নয়।
     new_link_entry = {"quality": quality, "size": size, "url": download_link, "label": f"{quality} Download"}
 
     if existing_content:
@@ -1179,6 +1176,7 @@ def add_from_bot():
             
             existing_content["links"].append(new_link_entry)
             
+            # TMDb থেকে পাওয়া তথ্য দিয়ে বিদ্যমান এন্ট্রি আপডেট করুন
             movies.update_one(
                 {"_id": existing_content["_id"]},
                 {"$set": {
