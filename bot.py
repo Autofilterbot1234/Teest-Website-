@@ -4,7 +4,7 @@ from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
-import re # রেগুলার এক্সপ্রেশন ব্যবহারের জন্য
+import re
 
 # .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
@@ -781,7 +781,6 @@ def movie_detail(movie_id):
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if movie:
             movie['_id'] = str(movie['_id'])
-            # এখানে TMDb ফেচিং লজিক দরকার নেই কারণ আমরা একবারই ফেচ করছি
         return render_template_string(detail_html, movie=movie)
     except Exception as e:
         print(f"Error fetching movie detail: {e}")
@@ -976,56 +975,48 @@ def add_from_bot():
 
     # --- ধাপ ২: বট থেকে পাঠানো JSON ডেটা গ্রহণ ---
     data = request.get_json()
-    # বট থেকে শুধুমাত্র 'link' প্যারামিটারটি অত্যাবশ্যক
     if not data or 'link' not in data:
         return {"status": "error", "message": "Missing 'link' in request"}, 400
 
     download_link = data.get('link')
     
-    # টাইটেল, কোয়ালিটি এবং সাইজ লিঙ্ক থেকে অনুমান করার চেষ্টা করা হবে
-    title = data.get('title') # যদি বট থেকে টাইটেল আসে, সেটা ব্যবহার করবে
-    if not title: # যদি টাইটেল না আসে, লিঙ্ক থেকে অনুমান করবে
-        title = extract_title_from_link(download_link)
-        if not title:
-            # যদি লিঙ্ক থেকেও টাইটেল বের করা না যায়, একটা ডিফল্ট বা এরর হ্যান্ডেলিং
-            print(f"Could not extract title from link: {download_link}")
-            return {"status": "error", "message": "Could not determine content title from link."}, 400
+    # বট থেকে যদি নির্দিষ্ট টাইটেল পাঠানো হয়, তবে সেটাই ব্যবহার করবে।
+    # অন্যথায়, লিঙ্ক থেকে অনুমান করবে।
+    input_title = data.get('title') 
 
-    quality = data.get('quality') # যদি বট থেকে কোয়ালিটি আসে, সেটা ব্যবহার করবে
-    if not quality: # যদি না আসে, লিঙ্ক থেকে অনুমান করবে
-        quality = extract_quality_from_link(download_link)
-        if not quality:
-            quality = 'HD' # অনুমান করা না গেলে ডিফল্ট
+    # যদি বট থেকে টাইটেল না আসে, লিঙ্ক থেকে অনুমান করবে
+    if not input_title: 
+        input_title = extract_title_from_link(download_link)
+        if not input_title:
+            print(f"Could not extract initial title from link: {download_link}")
+            return {"status": "error", "message": "Could not determine content title from link. Please provide 'title' parameter if link extraction fails."}, 400
 
-    size = data.get('size') # যদি বট থেকে সাইজ আসে, সেটা ব্যবহার করবে
-    if not size: # যদি না আসে, লিঙ্ক থেকে অনুমান করবে
-        size = extract_size_from_link(download_link)
-        if not size:
-            size = 'N/A' # অনুমান করা না গেলে ডিফল্ট
+    # কোয়ালিটি এবং সাইজ লিঙ্ক থেকে অনুমান করবে
+    quality = extract_quality_from_link(download_link)
+    size = extract_size_from_link(download_link)
 
-    # টাইপও লিঙ্ক থেকে অনুমান করা যেতে পারে, অথবা TMDb থেকে আসবে
-    initial_content_type = data.get('type', 'movie') # বট থেকে না পেলে ডিফল্ট 'movie'
+    print(f"Received from bot: Initial Title='{input_title}', Quality='{quality}', Size='{size}', Link='{download_link}'")
 
-    print(f"Received from bot (after processing): Title='{title}', Quality='{quality}', Size='{size}', Link='{download_link}'")
-
-    # --- ধাপ ৩: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ (টাইটেল ব্যবহার করে) ---
+    # --- ধাপ ৩: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ (অনুমানিত/প্রদত্ত টাইটেল ব্যবহার করে) ---
+    # TMDb থেকে প্রাপ্ত ডেটা ইনিশিয়ালাইজেশন
+    tmdb_title = input_title # প্রাথমিকভাবে ইনপুট টাইটেলকে TMDb টাইটেল ধরা হচ্ছে
     overview = "No overview available."
     poster = ""
     year = "N/A"
     genres = []
     release_date = ""
     tmdb_id = None
-    actual_content_type = initial_content_type
-    original_language = "N/A" # <-- এই লাইনটি যোগ করা হয়েছে
+    actual_content_type = "movie" # ডিফল্ট টাইপ
+    original_language = "N/A"
 
     try:
-        # TMDb সার্চের জন্য URL তৈরি করা। movie এবং tv (series) উভয়ই সার্চ করা।
-        # এটি টাইটেল দিয়ে সঠিক কন্টেন্ট টাইপ খুঁজে বের করতে সাহায্য করবে।
-        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={requests.utils.quote(title)}"
+        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={requests.utils.quote(input_title)}"
         search_res = requests.get(search_url, timeout=10).json()
         
         if search_res and search_res.get("results"):
             tmdb_result = None
+            # নিশ্চিত টাইপ না জানা থাকায় 'multi' সার্চ করা হচ্ছে
+            # তারপর 'movie' বা 'tv' রেজাল্ট থেকে সবচেয়ে প্রাসঙ্গিকটি খোঁজা হচ্ছে।
             for res_item in search_res["results"]:
                 if res_item.get("media_type") in ["movie", "tv"]:
                     tmdb_result = res_item
@@ -1038,10 +1029,13 @@ def add_from_bot():
                 detail_url = f"https://api.themoviedb.org/3/{tmdb_result.get('media_type')}/{tmdb_id}?api_key={TMDB_API_KEY}"
                 res = requests.get(detail_url, timeout=10).json()
                 
+                # TMDb থেকে প্রাপ্ত প্রকৃত টাইটেল ব্যবহার করা হবে
+                tmdb_title = res.get("title") or res.get("name") or input_title 
                 overview = res.get("overview", overview)
+                
                 if res.get("poster_path"):
                     poster = f"https://image.tmdb.org/t/p/w400{res['poster_path']}"
-                elif res.get("backdrop_path"):
+                elif res.get("backdrop_path"): # যদি পোস্টার না থাকে, ব্যাকড্রপ ব্যবহার করার চেষ্টা
                     poster = f"https://image.tmdb.org/t/p/w400{res['backdrop_path']}"
                 
                 release_date = res.get("release_date") or res.get("first_air_date")
@@ -1051,39 +1045,41 @@ def add_from_bot():
                 if res.get("genres"):
                     genres = [g['name'] for g in res['genres']]
                 
-                original_language = res.get("original_language", "N/A") # <-- এখানে ভ্যালু অ্যাসাইন হবে যদি TMDb থেকে আসে
+                original_language = res.get("original_language", "N/A")
 
-                print(f"Successfully fetched details for '{title}' from TMDb (Type: {actual_content_type}).")
+                print(f"Successfully fetched details for '{tmdb_title}' from TMDb (Type: {actual_content_type}).")
             else:
-                print(f"No relevant movie/series found on TMDb for '{title}'.")
+                print(f"No relevant movie/series found on TMDb for '{input_title}'. Using extracted title and default values.")
 
     except requests.exceptions.Timeout:
-        print(f"TMDb API request timed out for '{title}'.")
+        print(f"TMDb API request timed out for '{input_title}'. Using extracted title and default values.")
     except requests.exceptions.RequestException as e:
-        print(f"Error making TMDb API request for '{title}': {e}")
+        print(f"Error making TMDb API request for '{input_title}': {e}. Using extracted title and default values.")
     except Exception as e:
-        print(f"General error fetching data from TMDb for '{title}': {e}")
+        print(f"General error fetching data from TMDb for '{input_title}': {e}. Using extracted title and default values.")
 
     # --- ধাপ ৪: ডাটাবেসে সেভ করার জন্য ডেটা প্রস্তুত করা ---
-    query_filter = {"title": title, "type": actual_content_type}
+    # TMDb ID ব্যবহার করে অথবা টাইটেল ও টাইপ ব্যবহার করে কন্টেন্ট খোঁজা
+    query_filter = {"title": tmdb_title, "type": actual_content_type}
     if tmdb_id:
-        query_filter["tmdb_id"] = tmdb_id
+        query_filter = {"tmdb_id": tmdb_id, "type": actual_content_type} # TMDb ID থাকলে সেটাই মূল ফিল্টার হবে
 
     existing_content = movies.find_one(query_filter)
 
     if existing_content:
-        print(f"Updating existing content: '{title}' (ID: {existing_content['_id']})")
+        print(f"Updating existing content: '{tmdb_title}' (ID: {existing_content['_id']})")
         
         link_exists = False
         existing_links = existing_content.get("links", [])
         for link_item in existing_links:
-            if link_item.get("quality") == quality and link_item.get("url") == download_link:
+            if link_item.get("url") == download_link: # শুধুমাত্র URL দিয়ে লিঙ্ক এর উপস্থিতি যাচাই
                 link_exists = True
                 break
         
         if not link_exists:
             new_link_entry = {"quality": quality, "size": size, "url": download_link}
             
+            # নিশ্চিত করা যে 'links' ফিল্ড আছে, যদি না থাকে তবে খালি লিস্ট তৈরি করবে
             if "links" not in existing_content:
                 existing_content["links"] = []
             
@@ -1094,45 +1090,47 @@ def add_from_bot():
                 {"$set": {
                     "links": existing_content["links"],
                     "overview": overview,
-                    "poster": poster,
+                    "poster": poster, # TMDb থেকে পাওয়া পোস্টার
                     "year": year,
                     "release_date": release_date,
                     "genres": genres,
                     "original_language": original_language,
-                    "tmdb_id": tmdb_id
+                    "tmdb_id": tmdb_id,
+                    "title": tmdb_title, # নিশ্চিত করা TMDb টাইটেল ব্যবহার হচ্ছে
+                    "type": actual_content_type # নিশ্চিত করা TMDb টাইপ ব্যবহার হচ্ছে
                 }}
             )
-            print(f"Added new link ({quality}) to existing content '{title}'.")
-            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{title}'.", "movie_id": str(existing_content["_id"])}, 200
+            print(f"Added new link ({quality}) to existing content '{tmdb_title}'.")
+            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{tmdb_title}'.", "movie_id": str(existing_content["_id"])}, 200
         else:
-            print(f"Link with quality '{quality}' and URL '{download_link}' already exists for '{title}'. Skipping.")
-            return {"status": "info", "message": f"Link with quality '{quality}' already exists for '{title}'. Skipping.", "movie_id": str(existing_content["_id"])}, 200
+            print(f"Link '{download_link}' already exists for '{tmdb_title}'. Skipping.")
+            return {"status": "info", "message": f"Link already exists for '{tmdb_title}'. Skipping.", "movie_id": str(existing_content["_id"])}, 200
     else:
-        print(f"Adding new content: '{title}' (Type: {actual_content_type})")
+        print(f"Adding new content: '{tmdb_title}' (Type: {actual_content_type})")
         new_content = {
-            "title": title,
-            "type": actual_content_type,
-            "quality": quality,
+            "title": tmdb_title, # TMDb থেকে পাওয়া টাইটেল
+            "type": actual_content_type, # TMDb থেকে পাওয়া টাইপ
+            "quality": "HD", # আপাতত ডিফল্ট HD, পরে TMDb থেকে জনপ্রিয়তার ভিত্তিতে TRENDING করা যেতে পারে
             "top_label": "", 
             "is_trending": False,
             "is_coming_soon": False,
             "overview": overview,
-            "poster": poster,
+            "poster": poster, # TMDb থেকে পাওয়া পোস্টার
             "year": year,
             "release_date": release_date,
             "genres": genres,
-            "original_language": original_language, # <-- এখানে সঠিক ভ্যালু চলে আসবে
+            "original_language": original_language,
             "links": [{"quality": quality, "size": size, "url": download_link}],
-            "episodes": [],
+            "episodes": [], # নতুন কন্টেন্ট হলে এপিসোড খালি থাকবে
             "tmdb_id": tmdb_id
         }
         
         try:
             inserted_id = movies.insert_one(new_content).inserted_id
-            print(f"SUCCESS: Automatically added '{title}' to the database via bot. New ID: {inserted_id}")
-            return {"status": "success", "message": f"'{title}' added successfully.", "movie_id": str(inserted_id)}, 201
+            print(f"SUCCESS: Automatically added '{tmdb_title}' to the database via bot. New ID: {inserted_id}")
+            return {"status": "success", "message": f"'{tmdb_title}' added successfully.", "movie_id": str(inserted_id)}, 201
         except Exception as e:
-            print(f"DATABASE ERROR: Failed to insert '{title}'. Error: {e}")
+            print(f"DATABASE ERROR: Failed to insert '{tmdb_title}'. Error: {e}")
             return {"status": "error", "message": "Failed to save to database."}, 500
 
 # --- নতুন ইউটিলিটি ফাংশন: লিঙ্ক থেকে টাইটেল, কোয়ালিটি, সাইজ অনুমান করার জন্য ---
@@ -1144,18 +1142,16 @@ def extract_title_from_link(link):
         # URL থেকে ফাইলের নাম বের করা
         filename = link.split('/')[-1]
         # এক্সটেনশন এবং সম্ভাব্য অন্যান্য মেটাডেটা অপসারণ
-        # যেমন: .mp4, .mkv, .avi, .webm, .m3u8, ইত্যাদি
-        cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8)$', '', filename, flags=re.IGNORECASE)
-        cleaned_filename = re.sub(r'\.\d{3,4}p|\.x\d{3}|\.web-?dl|\.bluray|\.hdrip|\.brrip|\.dvdrip|\.dubbed|\.hindi|\.english|\.dual\.audio', '', cleaned_filename, flags=re.IGNORECASE)
-        cleaned_filename = re.sub(r'\.\d{4}', '', cleaned_filename) # বছর অপসারণ
-        cleaned_filename = cleaned_filename.replace('.', ' ').strip() # ডট স্পেস দিয়ে প্রতিস্থাপন
-        
-        # কিছু সাধারণ কীওয়ার্ড যা টাইটেলে থাকা উচিত নয়
-        keywords_to_remove = ["movies", "series", "full", "movie", "official"]
+        cleaned_filename = re.sub(r'\.(mp4|mkv|avi|webm|m3u8|rar|zip)$', '', filename, flags=re.IGNORECASE)
+        # রেজোলিউশন, কোডেক, টিম নেম, ল্যাঙ্গুয়েজ, বছর, ইত্যাদি সরিয়ে ফেলা
+        cleaned_filename = re.sub(r'\b\d{3,4}p\b|\b(?:x264|x265|h264|h265|aac|mp3)\b|\b(?:WEB-DL|WEBRip|BluRay|HDTV|HDRip|BRRip|DVDScr|DVDRip|BDRip)\b|\b(?:ITA|ENG|DUAL|MULTI|HINDI|ORG)\b|\b(?:AAC2\.0|DDP5\.1)\b|\b(?:[A-Za-z0-9]+)?\d{4}\b|\b(?:ETRG|YTS|RARBG|GECKOS|ION10|NTB)\b', '', cleaned_filename, flags=re.IGNORECASE)
+        # অতিরিক্ত ডট, হাইফেন, আন্ডারস্কোরকে স্পেস দিয়ে প্রতিস্থাপন
+        cleaned_filename = re.sub(r'[._-]', ' ', cleaned_filename)
+        # অপ্রয়োজনীয় শব্দ (যেমন movie, series) অপসারণ
+        keywords_to_remove = ["movie", "series", "full", "official", "trailer", "complete", "season"]
         for kw in keywords_to_remove:
-            # শব্দগুলো পুরো শব্দ হিসেবে মুছে ফেলবে, যেমন "movie" যদি "movieworld" এর অংশ হয় তবে তা মুছবে না
             cleaned_filename = re.sub(r'\b' + re.escape(kw) + r'\b', '', cleaned_filename, flags=re.IGNORECASE).strip()
-
+        
         # অতিরিক্ত স্পেস অপসারণ
         cleaned_filename = re.sub(r'\s+', ' ', cleaned_filename).strip()
 
@@ -1175,10 +1171,10 @@ def extract_quality_from_link(link):
     return "HD" # কিছু পাওয়া না গেলে ডিফল্ট
 
 def extract_size_from_link(link):
-    sizes = re.findall(r'(\d+\.?\d*(?:GB|MB))', link, re.IGNORECASE)
+    sizes = re.findall(r'(\d+\.?\d*\s*(?:GB|MB))', link, re.IGNORECASE) # স্পেস সহ MB/GB ধরার জন্য
     if sizes:
         # একাধিক সাইজ থাকলে প্রথমটি নেওয়া
-        return sizes[0].upper()
+        return sizes[0].upper().replace(" ", "") # স্পেস সরিয়ে দেওয়া
     return "N/A" # কিছু পাওয়া না গেলে ডিফল্ট
 
 
