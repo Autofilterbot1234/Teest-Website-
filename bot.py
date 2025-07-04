@@ -5,32 +5,29 @@ import requests, os
 from functools import wraps
 from dotenv import load_dotenv
 
-# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন (শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য)
+# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
 
 app = Flask(__name__)
 
-# Environment variables for MongoDB URI and TMDb API Key
+# Environment variables
 MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-# --- অ্যাডমিন অথেন্টিকেশনের জন্য নতুন ভেরিয়েবল ও ফাংশন ---
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
+BOT_SECRET_KEY = os.getenv("BOT_SECRET_KEY") # বট ইন্টিগ্রেশনের জন্য নতুন কী
 
+# --- অথেন্টিকেশন ফাংশন ---
 def check_auth(username, password):
-    """ইউজারনেম ও পাসওয়ার্ড সঠিক কিনা তা যাচাই করে।"""
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
 def authenticate():
-    """অথেন্টিকেশন ব্যর্থ হলে 401 রেসপন্স পাঠায়।"""
     return Response(
     'Could not verify your access level for that URL.\n'
     'You have to login with proper credentials', 401,
     {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
-    """এই ডেকোরেটরটি রুট ফাংশনে অথেন্টিকেশন চেক করে।"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
@@ -38,17 +35,12 @@ def requires_auth(f):
             return authenticate()
         return f(*args, **kwargs)
     return decorated
-# --- অথেন্টিকেশন সংক্রান্ত পরিবর্তন শেষ ---
 
-# Check if environment variables are set
-if not MONGO_URI:
-    print("Error: MONGO_URI environment variable not set. Exiting.")
-    exit(1)
-if not TMDB_API_KEY:
-    print("Error: TMDB_API_KEY environment variable not set. Exiting.")
+# --- ভেরিয়েবল ও কানেকশন চেক ---
+if not all([MONGO_URI, TMDB_API_KEY, BOT_SECRET_KEY]):
+    print("Error: MONGO_URI, TMDB_API_KEY, or BOT_SECRET_KEY environment variable not set. Exiting.")
     exit(1)
 
-# Database connection
 try:
     client = MongoClient(MONGO_URI)
     db = client["movie_db"]
@@ -58,7 +50,7 @@ except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
 
-# TMDb Genre Map (for converting genre IDs to names)
+# TMDb Genre Map (Not used directly but good for reference)
 TMDb_Genre_Map = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
     99: "Documentary", 18: "Drama", 10402: "Music", 9648: "Mystery",
@@ -66,6 +58,9 @@ TMDb_Genre_Map = {
     10752: "War", 37: "Western", 10751: "Family", 14: "Fantasy", 36: "History"
 }
 
+# --- টেমপ্লেটগুলো এখানে থাকবে (আপনার প্রদত্ত কোডের মতোই) ---
+# index_html, detail_html, admin_html, edit_html টেমপ্লেটগুলো এখানে পেস্ট করুন
+# ... (পূর্ববর্তী কোডের বিশাল টেমপ্লেট স্ট্রিংগুলো এখানে থাকবে) ...
 # --- START OF index_html TEMPLATE (Final Mobile-First Polish with all updates) ---
 index_html = """
 <!DOCTYPE html>
@@ -268,7 +263,6 @@ index_html = """
       {% else %}
         <div class="full-page-grid">
           {% for m in movies %}
-          <!-- CHANGE: Implemented lazy loading and skeleton loader -->
           <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
             {% if m.poster %}
               <img class="movie-poster" loading="lazy" src="{{ m.poster }}" alt="{{ m.title }}">
@@ -304,7 +298,6 @@ index_html = """
         <div class="carousel-wrapper">
           <div class="carousel-content">
             {% for m in movies_list %}
-            <!-- CHANGE: Implemented lazy loading and skeleton loader -->
             <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
               {% if m.poster %}
                 <img class="movie-poster" loading="lazy" src="{{ m.poster }}" alt="{{ m.title }}">
@@ -470,7 +463,6 @@ detail_html = """
 <div class="detail-hero">
   <div class="detail-hero-background" style="background-image: url('{{ movie.poster }}');"></div>
   <div class="detail-content-wrapper">
-    <!-- CHANGE: Added lazy loading to the main poster image -->
     <img class="detail-poster" loading="lazy" src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
     <div class="detail-info">
       <h1 class="detail-title">{{ movie.title }}</h1>
@@ -488,7 +480,7 @@ detail_html = """
           {% if movie.links %}
             {% for link_item in movie.links %}
             <a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener">
-              <i class="fas fa-download"></i> {{ link_item.quality }} [{{ link_item.size }}]
+              <i class="fas fa-download"></i> {{ link_item.quality }} {% if link_item.size %}[{{ link_item.size }}]{% endif %}
             </a>
             {% endfor %}
           {% else %}<p class="no-link-message">No links available.</p>{% endif %}
@@ -758,51 +750,29 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
+# --- পুরনো রুটগুলো (Home, Detail, Admin, etc.) ---
 @app.route('/')
 def home():
     query = request.args.get('q')
-    
-    movies_list = []
-    trending_movies_list = []
-    latest_movies_list = []
-    latest_series_list = []
-    coming_soon_movies_list = []
-    recently_added_list = []
-
-    is_full_page_list = False
+    movies_list, trending_movies_list, latest_movies_list, latest_series_list, coming_soon_movies_list, recently_added_list = [], [], [], [], [], []
+    is_full_page_list = bool(query)
 
     if query:
         result = movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1)
         movies_list = list(result)
-        is_full_page_list = True
         query = f'Results for "{query}"'
     else:
         limit = 18
         trending_movies_list = list(movies.find({"quality": "TRENDING"}).sort('_id', -1).limit(limit))
-        latest_movies_list = list(movies.find({"type": "movie", "quality": {"$ne": "TRENDING"}, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
-        latest_series_list = list(movies.find({"type": "series", "quality": {"$ne": "TRENDING"}, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
+        latest_movies_list = list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
+        latest_series_list = list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
         coming_soon_movies_list = list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit))
         recently_added_list = list(movies.find().sort('_id', -1).limit(limit))
 
-    all_fetched_content = movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list
-    processed_ids = set()
-    for m in all_fetched_content:
-        if m['_id'] not in processed_ids:
-            m['_id'] = str(m['_id'])
-            processed_ids.add(m['_id'])
-
-    return render_template_string(
-        index_html, 
-        movies=movies_list, 
-        query=query,
-        trending_movies=trending_movies_list,
-        latest_movies=latest_movies_list,
-        latest_series=latest_series_list,
-        coming_soon_movies=coming_soon_movies_list,
-        recently_added=recently_added_list,
-        is_full_page_list=is_full_page_list
-    )
-
+    all_content = movies_list + trending_movies_list + latest_movies_list + latest_series_list + coming_soon_movies_list + recently_added_list
+    for m in all_content: m['_id'] = str(m['_id'])
+    
+    return render_template_string(index_html, movies=movies_list, query=query, trending_movies=trending_movies_list, latest_movies=latest_movies_list, latest_series=latest_series_list, coming_soon_movies=coming_soon_movies_list, recently_added=recently_added_list, is_full_page_list=is_full_page_list)
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -810,65 +780,7 @@ def movie_detail(movie_id):
         movie = movies.find_one({"_id": ObjectId(movie_id)})
         if movie:
             movie['_id'] = str(movie['_id'])
-            
-            tmdb_search_type = "movie" if movie.get("type") == "movie" else "tv"
-            
-            should_fetch_tmdb = TMDB_API_KEY and (
-                not movie.get("tmdb_id") or 
-                movie.get("overview") == "No overview available." or 
-                not movie.get("poster")
-            )
-
-            if should_fetch_tmdb:
-                tmdb_id = movie.get("tmdb_id")
-                
-                if not tmdb_id:
-                    search_url = f"https://api.themoviedb.org/3/search/{tmdb_search_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
-                    try:
-                        search_res = requests.get(search_url, timeout=5).json()
-                        if search_res and search_res.get("results"):
-                            tmdb_id = search_res["results"][0].get("id")
-                            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": {"tmdb_id": tmdb_id}})
-                        else:
-                            tmdb_id = None
-                    except requests.RequestException as e:
-                        print(f"TMDb search error: {e}")
-                        tmdb_id = None
-
-                if tmdb_id:
-                    detail_url = f"https://api.themoviedb.org/3/{tmdb_search_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
-                    try:
-                        res = requests.get(detail_url, timeout=5).json()
-                        update_fields = {}
-                        
-                        if movie.get("overview") == "No overview available." and res.get("overview"):
-                            update_fields["overview"] = movie["overview"] = res["overview"]
-                        # CHANGE: Using a smaller image size (w400) for better mobile performance
-                        if not movie.get("poster") and res.get("poster_path"):
-                            update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w400{res['poster_path']}"
-                        
-                        if tmdb_search_type == "movie":
-                            release_date = res.get("release_date")
-                            if release_date:
-                                update_fields["year"] = movie["year"] = release_date[:4]
-                                update_fields["release_date"] = movie["release_date"] = release_date
-                        else: # tv series
-                            first_air_date = res.get("first_air_date")
-                            if first_air_date:
-                                update_fields["year"] = movie["year"] = first_air_date[:4]
-                                update_fields["release_date"] = movie["release_date"] = first_air_date
-                        
-                        if res.get("vote_average"):
-                            update_fields["vote_average"] = movie["vote_average"] = res["vote_average"]
-                        if not movie.get("genres") and res.get("genres"):
-                            update_fields["genres"] = movie["genres"] = [g['name'] for g in res['genres']]
-                        
-                        if update_fields:
-                            movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
-                            
-                    except requests.RequestException as e:
-                        print(f"TMDb detail fetch error: {e}")
-
+            # এখানে TMDb ফেচিং লজিক দরকার নেই কারণ আমরা একবারই ফেচ করছি
         return render_template_string(detail_html, movie=movie)
     except Exception as e:
         print(f"Error fetching movie detail: {e}")
@@ -883,47 +795,57 @@ def admin():
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
         
         movie_data = {
-            "title": request.form.get("title"),
-            "type": content_type,
-            "quality": quality_tag,
-            "top_label": request.form.get("top_label", ""),
-            "is_trending": is_trending,
+            "title": request.form.get("title"), "type": content_type, "quality": quality_tag,
+            "top_label": request.form.get("top_label", ""), "is_trending": is_trending,
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "overview": request.form.get("overview", "No overview available."),
-            "poster": request.form.get("poster_url", ""),
-            "year": request.form.get("year", "N/A"),
+            "poster": request.form.get("poster_url", ""), "year": request.form.get("year", "N/A"),
             "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
             "tmdb_id": None,
         }
 
-        if content_type == "movie":
+        # মুভি লিঙ্ক যোগ করা
+        if content_type == 'movie':
             links = []
-            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
-            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "1.4GB", "url": request.form.get("link_720p")})
-            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "2.9GB", "url": request.form.get("link_1080p")})
+            if request.form.get("link_480p"):
+                links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p")})
+            if request.form.get("link_720p"):
+                links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p")})
+            if request.form.get("link_1080p"):
+                links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p")})
             movie_data["links"] = links
-        else:
-            episodes = []
-            ep_numbers = request.form.getlist('episode_number[]')
-            for i in range(len(ep_numbers)):
+            movie_data["episodes"] = [] # মুভি হলে এপিসোড খালি থাকবে
+        
+        # সিরিজ এপিসোড যোগ করা
+        elif content_type == 'series':
+            episodes_data = []
+            episode_numbers = request.form.getlist('episode_number[]')
+            episode_titles = request.form.getlist('episode_title[]')
+            episode_overviews = request.form.getlist('episode_overview[]')
+            episode_link_480p = request.form.getlist('episode_link_480p[]')
+            episode_link_720p = request.form.getlist('episode_link_720p[]')
+            episode_link_1080p = request.form.getlist('episode_link_1080p[]')
+
+            for i in range(len(episode_numbers)):
                 ep_links = []
-                if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": request.form.getlist('episode_link_480p[]')[i]})
-                if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": request.form.getlist('episode_link_720p[]')[i]})
-                if request.form.getlist('episode_link_1080p[]')[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": request.form.getlist('episode_link_1080p[]')[i]})
-                episodes.append({
-                    "episode_number": int(ep_numbers[i]),
-                    "title": request.form.getlist('episode_title[]')[i],
-                    "overview": request.form.getlist('episode_overview[]')[i],
+                if episode_link_480p[i]:
+                    ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i]})
+                if episode_link_720p[i]:
+                    ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i]})
+                if episode_link_1080p[i]:
+                    ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i]})
+                
+                episodes_data.append({
+                    "episode_number": int(episode_numbers[i]),
+                    "title": episode_titles[i],
+                    "overview": episode_overviews[i],
                     "links": ep_links
                 })
-            movie_data["episodes"] = episodes
+            movie_data["episodes"] = episodes_data
+            movie_data["links"] = [] # সিরিজ হলে মুভি লিঙ্ক খালি থাকবে
 
-        try:
-            movies.insert_one(movie_data)
-        except Exception as e:
-            print(f"DB insert error: {e}")
-            
+        movies.insert_one(movie_data)
         return redirect(url_for('admin'))
 
     admin_query = request.args.get('q')
@@ -946,39 +868,57 @@ def edit_movie(movie_id):
         is_trending = request.form.get("is_trending") == "true"
         quality_tag = "TRENDING" if is_trending else request.form.get("quality", "").upper()
 
-        update_data = {
+        updated_data = {
             "title": request.form.get("title"), "type": content_type, "quality": quality_tag,
-            "top_label": request.form.get("top_label", ""), "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "overview": request.form.get("overview", "No overview available."), "poster": request.form.get("poster_url", ""),
-            "year": request.form.get("year", "N/A"), "original_language": request.form.get("original_language", "N/A"),
+            "top_label": request.form.get("top_label", ""), "is_trending": is_trending,
+            "is_coming_soon": request.form.get("is_coming_soon") == "true",
+            "overview": request.form.get("overview", "No overview available."),
+            "poster": request.form.get("poster_url", ""), "year": request.form.get("year", "N/A"),
+            "original_language": request.form.get("original_language", "N/A"),
             "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
         }
 
-        if content_type == "movie":
+        if content_type == 'movie':
             links = []
-            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "590MB", "url": request.form.get("link_480p")})
-            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "1.4GB", "url": request.form.get("link_720p")})
-            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "2.9GB", "url": request.form.get("link_1080p")})
-            update_data["links"] = links
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
-        else: # series
-            episodes = []
-            ep_numbers = request.form.getlist('episode_number[]')
-            for i in range(len(ep_numbers)):
-                ep_links = []
-                if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "size": "N/A", "url": request.form.getlist('episode_link_480p[]')[i]})
-                if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "size": "N/A", "url": request.form.getlist('episode_link_720p[]')[i]})
-                if request.form.getlist('episode_link_1080p[]')[i]: ep_links.append({"quality": "1080p", "size": "N/A", "url": request.form.getlist('episode_link_1080p[]')[i]})
-                episodes.append({
-                    "episode_number": int(ep_numbers[i]), "title": request.form.getlist('episode_title[]')[i],
-                    "overview": request.form.getlist('episode_overview[]')[i], "links": ep_links
-                })
-            update_data["episodes"] = episodes
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": ""}})
-        
-        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
-        return redirect(url_for('admin'))
+            if request.form.get("link_480p"):
+                links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p")})
+            if request.form.get("link_720p"):
+                links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p")})
+            if request.form.get("link_1080p"):
+                links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p")})
+            updated_data["links"] = links
+            updated_data["episodes"] = [] # মুভি হলে এপিসোড খালি থাকবে
+        elif content_type == 'series':
+            episodes_data = []
+            episode_numbers = request.form.getlist('episode_number[]')
+            episode_titles = request.form.getlist('episode_title[]')
+            episode_overviews = request.form.getlist('episode_overview[]')
+            episode_link_480p = request.form.getlist('episode_link_480p[]')
+            episode_link_720p = request.form.getlist('episode_link_720p[]')
+            episode_link_1080p = request.form.getlist('episode_link_1080p[]')
 
+            for i in range(len(episode_numbers)):
+                ep_links = []
+                if episode_link_480p[i]:
+                    ep_links.append({"quality": "480p", "size": "N/A", "url": episode_link_480p[i]})
+                if episode_link_720p[i]:
+                    ep_links.append({"quality": "720p", "size": "N/A", "url": episode_link_720p[i]})
+                if episode_link_1080p[i]:
+                    ep_links.append({"quality": "1080p", "size": "N/A", "url": episode_link_1080p[i]})
+                
+                episodes_data.append({
+                    "episode_number": int(episode_numbers[i]),
+                    "title": episode_titles[i],
+                    "overview": episode_overviews[i],
+                    "links": ep_links
+                })
+            updated_data["episodes"] = episodes_data
+            updated_data["links"] = [] # সিরিজ হলে মুভি লিঙ্ক খালি থাকবে
+
+        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": updated_data})
+        return redirect(url_for('admin'))
+    
+    # ObjectId কে স্ট্রিং এ রূপান্তর করে টেমপ্লেটে পাঠানো
     movie_obj['_id'] = str(movie_obj['_id'])
     return render_template_string(edit_html, movie=movie_obj)
 
@@ -987,15 +927,16 @@ def edit_movie(movie_id):
 def delete_movie(movie_id):
     try:
         movies.delete_one({"_id": ObjectId(movie_id)})
+        print(f"Deleted movie with ID: {movie_id}")
     except Exception as e:
         print(f"DB delete error: {e}")
     return redirect(url_for('admin'))
 
+# --- Category/Full List Pages ---
 def render_full_list(content_list, title):
-    for m in content_list:
-        m['_id'] = str(m['_id'])
+    for m in content_list: m['_id'] = str(m['_id'])
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
-
+    
 @app.route('/trending_movies')
 def trending_movies():
     trending_list = list(movies.find({"quality": "TRENDING"}).sort('_id', -1))
@@ -1021,6 +962,167 @@ def recently_added_all():
     all_recent_content = list(movies.find().sort('_id', -1))
     return render_full_list(all_recent_content, "Recently Added")
 
+# ===================================================================
+# === নতুন API এন্ডপয়েন্ট: টেলিগ্রাম বট থেকে কন্টেন্ট যোগ করার জন্য ===
+# ===================================================================
+@app.route('/api/add_from_bot', methods=['POST'])
+def add_from_bot():
+    # --- ধাপ ১: নিরাপত্তা যাচাই ---
+    bot_key_header = request.headers.get('X-Bot-Secret-Key')
+    if not bot_key_header or bot_key_header != BOT_SECRET_KEY:
+        print(f"Unauthorized attempt to access bot API. Key used: {bot_key_header}")
+        return {"status": "error", "message": "Unauthorized"}, 401
+
+    # --- ধাপ ২: বট থেকে পাঠানো JSON ডেটা গ্রহণ ---
+    data = request.get_json()
+    # বট থেকে ন্যূনতম টাইটেল এবং লিঙ্ক প্রয়োজন
+    if not data or 'title' not in data or 'link' not in data:
+        return {"status": "error", "message": "Missing 'title' or 'link' in request"}, 400
+
+    title = data.get('title')
+    download_link = data.get('link')
+    # কোয়ালিটি বা সাইজ বট থেকে না পেলে ডিফল্ট ভ্যালু ব্যবহার করা হবে
+    quality = data.get('quality', 'HD') # ডিফল্ট 'HD'
+    size = data.get('size', 'N/A')     # ডিফল্ট 'N/A'
+    
+    # বট থেকে টাইপ না এলে, TMDb থেকে প্রাপ্ত টাইপ ব্যবহার করা হবে, ডিফল্ট 'movie'
+    initial_content_type = data.get('type', 'movie') 
+
+    print(f"Received from bot: Title='{title}', Quality='{quality}', Link='{download_link}'")
+
+    # --- ধাপ ৩: TMDb থেকে স্বয়ংক্রিয়ভাবে তথ্য সংগ্রহ (টাইটেল ব্যবহার করে) ---
+    overview, poster, year, genres, release_date, tmdb_id, actual_content_type = \
+        "No overview available.", "", "N/A", [], "", None, initial_content_type
+
+    try:
+        # TMDb সার্চের জন্য URL তৈরি করা। movie এবং tv (series) উভয়ই সার্চ করা।
+        # এটি টাইটেল দিয়ে সঠিক কন্টেন্ট টাইপ খুঁজে বের করতে সাহায্য করবে।
+        search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={requests.utils.quote(title)}"
+        search_res = requests.get(search_url, timeout=10).json()
+        
+        if search_res and search_res.get("results"):
+            # প্রথম প্রাসঙ্গিক ফলাফলটি নেওয়া
+            tmdb_result = None
+            for res_item in search_res["results"]:
+                # শুধুমাত্র মুভি বা টিভি সিরিজ ফলাফল গ্রহণ করব
+                if res_item.get("media_type") in ["movie", "tv"]:
+                    tmdb_result = res_item
+                    break
+            
+            if tmdb_result:
+                tmdb_id = tmdb_result.get("id")
+                actual_content_type = "movie" if tmdb_result.get("media_type") == "movie" else "series"
+
+                # TMDb থেকে বিস্তারিত তথ্য ফেচ করা
+                detail_url = f"https://api.themoviedb.org/3/{tmdb_result.get('media_type')}/{tmdb_id}?api_key={TMDB_API_KEY}"
+                res = requests.get(detail_url, timeout=10).json()
+                
+                overview = res.get("overview", overview)
+                if res.get("poster_path"):
+                    poster = f"https://image.tmdb.org/t/p/w400{res['poster_path']}"
+                elif res.get("backdrop_path"): # পোস্টার না পেলে ব্যাকড্রপ ব্যবহার করা
+                    poster = f"https://image.tmdb.org/t/p/w400{res['backdrop_path']}"
+                
+                release_date = res.get("release_date") or res.get("first_air_date")
+                if release_date:
+                    year = release_date[:4]
+                
+                if res.get("genres"):
+                    genres = [g['name'] for g in res['genres']]
+                
+                original_language = res.get("original_language", "N/A")
+
+                print(f"Successfully fetched details for '{title}' from TMDb (Type: {actual_content_type}).")
+            else:
+                print(f"No relevant movie/series found on TMDb for '{title}'.")
+
+    except requests.exceptions.Timeout:
+        print(f"TMDb API request timed out for '{title}'.")
+    except requests.exceptions.RequestException as e:
+        print(f"Error making TMDb API request for '{title}': {e}")
+    except Exception as e:
+        print(f"General error fetching data from TMDb for '{title}': {e}")
+
+    # --- ধাপ ৪: ডাটাবেসে সেভ করার জন্য ডেটা প্রস্তুত করা ---
+    # যদি একই টাইটেলের মুভি বা সিরিজ (এবং TMDb ID যদি থাকে) আগে থেকেই থাকে, তাহলে শুধু লিঙ্ক যোগ/আপডেট করা হবে।
+    # না হলে নতুন ডকুমেন্ট তৈরি করা হবে।
+
+    query_filter = {"title": title, "type": actual_content_type}
+    if tmdb_id:
+        query_filter["tmdb_id"] = tmdb_id # যদি TMDb ID থাকে, তাহলে আরো সুনির্দিষ্টভাবে খুঁজব
+
+    existing_content = movies.find_one(query_filter)
+
+    if existing_content:
+        # বিদ্যমান কন্টেন্ট থাকলে, তার লিঙ্কগুলো আপডেট করা
+        print(f"Updating existing content: '{title}' (ID: {existing_content['_id']})")
+        
+        # লিঙ্ক যদি ইতিমধ্যেই থাকে তবে যোগ করা হবে না
+        link_exists = False
+        existing_links = existing_content.get("links", [])
+        for link_item in existing_links:
+            if link_item.get("quality") == quality and link_item.get("url") == download_link:
+                link_exists = True
+                break
+        
+        if not link_exists:
+            # নতুন লিঙ্ক যোগ করা
+            new_link_entry = {"quality": quality, "size": size, "url": download_link}
+            
+            # লিঙ্কগুলো যদি না থাকে, নতুন লিস্ট তৈরি করুন
+            if "links" not in existing_content:
+                existing_content["links"] = []
+            
+            existing_content["links"].append(new_link_entry)
+            
+            # MongoDB তে আপডেট করা (অন্যান্য TMDb ফিল্ডও আপডেট করা, যদি কোনো নতুন তথ্য আসে)
+            movies.update_one(
+                {"_id": existing_content["_id"]},
+                {"$set": {
+                    "links": existing_content["links"],
+                    "overview": overview,
+                    "poster": poster,
+                    "year": year,
+                    "release_date": release_date,
+                    "genres": genres,
+                    "original_language": original_language,
+                    "tmdb_id": tmdb_id
+                }}
+            )
+            print(f"Added new link ({quality}) to existing content '{title}'.")
+            return {"status": "success", "message": f"Added new link ({quality}) to existing content '{title}'."}, 200
+        else:
+            print(f"Link with quality '{quality}' and URL '{download_link}' already exists for '{title}'. Skipping.")
+            return {"status": "info", "message": f"Link with quality '{quality}' already exists for '{title}'. Skipping."}, 200
+    else:
+        # নতুন কন্টেন্ট হলে, ডাটাবেসে নতুন এন্ট্রি যোগ করা
+        print(f"Adding new content: '{title}' (Type: {actual_content_type})")
+        new_content = {
+            "title": title,
+            "type": actual_content_type, # TMDb থেকে প্রাপ্ত টাইপ ব্যবহার করা হচ্ছে
+            "quality": quality,  # এটি প্রাথমিক কোয়ালিটি হিসেবে সেভ হবে
+            "top_label": "", # বট থেকে এইটা আসে না
+            "is_trending": False, # ম্যানুয়ালি অ্যাডমিন প্যানেল থেকে সেট করতে হবে
+            "is_coming_soon": False, # ম্যানুয়ালি অ্যাডমিন প্যানেল থেকে সেট করতে হবে
+            "overview": overview,
+            "poster": poster,
+            "year": year,
+            "release_date": release_date,
+            "genres": genres,
+            "original_language": original_language,
+            "links": [{"quality": quality, "size": size, "url": download_link}],
+            "episodes": [], # সিরিজ হলে এপিসোডগুলো ম্যানুয়ালি অ্যাডমিন প্যানেল থেকে যোগ করতে হবে।
+            "tmdb_id": tmdb_id
+        }
+        
+        try:
+            movies.insert_one(new_content)
+            print(f"SUCCESS: Automatically added '{title}' to the database via bot.")
+            return {"status": "success", "message": f"'{title}' added successfully."}, 201
+        except Exception as e:
+            print(f"DATABASE ERROR: Failed to insert '{title}'. Error: {e}")
+            return {"status": "error", "message": "Failed to save to database."}, 500
+# ===================================================================
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
