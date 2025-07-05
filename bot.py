@@ -458,7 +458,7 @@ detail_html = """
           <h3 class="section-title">Download Links</h3>
             {% for link_item in movie.links %}
             <a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener">
-              <i class="fas fa-download"></i> {{ link_item.quality }} [{{ link_item.size }}]
+              <i class="fas fa-download"></i> {{ link_item.quality }} [{{ link_item.size or 'N/A' }}]
             </a>
             <button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i> Copy</button>
             {% endfor %}
@@ -468,6 +468,9 @@ detail_html = """
           <div class="episode-item">
             <h4 class="episode-title">E{{ episode.episode_number }}: {{ episode.title }}</h4>
             {% if episode.overview %}<p class="episode-overview-text">{{ episode.overview }}</p>{% endif %}
+            {% if episode.watch_link %}
+                <a href="{{ url_for('watch_movie', movie_id=movie._id, ep=episode.episode_number) }}" class="episode-download-button" style="background-color: var(--netflix-red);"><i class="fas fa-play"></i> Watch Episode</a>
+            {% endif %}
             {% if episode.links %}
               {% for link_item in episode.links %}
                 <a class="episode-download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }}</a>
@@ -507,7 +510,7 @@ watch_html = """
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Watching: {{ movie.title }}</title>
+<title>Watching: {{ title }}</title>
 <style>
     body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
     .player-container { width: 100%; height: 100%; }
@@ -517,7 +520,7 @@ watch_html = """
 <body>
     <div class="player-container">
         <iframe 
-            src="{{ movie.watch_link }}" 
+            src="{{ watch_link }}" 
             allowfullscreen 
             allowtransparency 
             allow="autoplay"
@@ -583,23 +586,24 @@ admin_html = """
   <h2>Add New Content</h2>
   <form method="post">
     <div class="form-group"><label for="title">Title:</label><input type="text" name="title" id="title" required /></div>
-    <div class="form-group"><label for="watch_link">Watch Link (Embed URL):</label><input type="url" name="watch_link" id="watch_link" /></div>
     <div class="form-group"><label for="content_type">Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="series">TV/Web Series</option></select></div>
-    <div id="movie_download_links_group">
-      <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" /></div>
-      <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" /></div>
-      <div class="form-group"><label>1080p Link:</label><input type="url" name="link_1080p" /></div>
+    
+    <div id="movie_fields">
+        <div class="form-group"><label for="watch_link">Watch Link (Embed URL):</label><input type="url" name="watch_link" id="watch_link" /></div>
+        <hr><p style="text-align:center; font-weight:bold;">OR Download Links</p>
+        <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" /></div>
+        <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" /></div>
+        <div class="form-group"><label>1080p Link:</label><input type="url" name="link_1080p" /></div>
     </div>
+
     <div id="episode_fields" style="display: none;">
       <h3>Episodes</h3><div id="episodes_container"></div>
       <button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button>
     </div>
+    
     <hr style="border-color: #333; margin: 20px 0;">
-    <div class="form-group"><label for="quality">Quality Tag (e.g., HD):</label><input type="text" name="quality" id="quality" /></div>
     <div class="form-group"><input type="checkbox" name="is_trending" id="is_trending" value="true"><label for="is_trending" style="display: inline-block;">Is Trending?</label></div>
     <div class="form-group"><input type="checkbox" name="is_coming_soon" id="is_coming_soon" value="true"><label for="is_coming_soon" style="display: inline-block;">Is Coming Soon?</label></div>
-    <div class="form-group"><label for="overview">Overview (Optional):</label><textarea name="overview" id="overview"></textarea></div>
-    <div class="form-group"><label for="poster_url">Poster URL (Optional):</label><input type="url" name="poster_url" id="poster_url" /></div>
     <button type="submit">Add Content</button>
   </form>
 
@@ -623,7 +627,7 @@ admin_html = """
     function toggleEpisodeFields() {
         var isSeries = document.getElementById('content_type').value === 'series';
         document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none';
-        document.getElementById('movie_download_links_group').style.display = isSeries ? 'none' : 'block';
+        document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block';
     }
     function addEpisodeField() {
         const container = document.getElementById('episodes_container');
@@ -632,9 +636,8 @@ admin_html = """
         div.innerHTML = `
             <div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div>
             <div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div>
-            <div class="form-group"><label>Ep Overview:</label><textarea name="episode_overview[]"></textarea></div>
-            <div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" /></div>
-            <hr><p>OR</p>
+            <div class="form-group"><label>Watch Link (Embed):</label><input type="url" name="episode_watch_link[]" /></div>
+            <hr><p>OR Download Links</p>
             <div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div>
             <div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div>
             <button type="button" onclick="this.parentElement.remove()" class="delete-btn" style="background:#dc3545; padding: 6px 12px;">Remove Ep</button>
@@ -688,25 +691,26 @@ edit_html = """
   <h2>Edit: {{ movie.title }}</h2>
   <form method="post">
     <div class="form-group"><label>Title:</label><input type="text" name="title" value="{{ movie.title }}" required /></div>
-    <div class="form-group"><label>Watch Link (Embed URL):</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div>
     <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()">
         <option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option>
         <option value="series" {% if movie.type == 'series' %}selected{% endif %}>TV/Web Series</option>
     </select></div>
-    <div id="movie_download_links_group">
+
+    <div id="movie_fields">
+        <div class="form-group"><label>Watch Link (Embed URL):</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div>
+        <hr><p style="text-align:center; font-weight:bold;">OR Download Links</p>
         <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" value="{% for l in movie.links %}{% if l.quality == '480p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
         <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" value="{% for l in movie.links %}{% if l.quality == '720p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
         <div class="form-group"><label>1080p Link:</label><input type="url" name="link_1080p" value="{% for l in movie.links %}{% if l.quality == '1080p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
     </div>
+
     <div id="episode_fields" style="display: none;">
         <h3>Episodes</h3><div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes %}
         <div class="episode-item">
-            <input type="hidden" name="episode_id[]" value="{{ ep.episode_number }}">
             <div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required /></div>
             <div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" value="{{ ep.title }}" required /></div>
-            <div class="form-group"><label>Ep Overview:</label><textarea name="episode_overview[]">{{ ep.overview or '' }}</textarea></div>
-            <div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div>
+            <div class="form-group"><label>Watch Link (Embed):</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div>
             <hr><p>OR Download Links</p>
             <div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" value="{% for l in ep.links %}{% if l.quality=='480p'%}{{l.url}}{%endif%}{%endfor%}" /></div>
             <div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" value="{% for l in ep.links %}{% if l.quality=='720p'%}{{l.url}}{%endif%}{%endfor%}" /></div>
@@ -716,22 +720,32 @@ edit_html = """
         </div>
         <button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button>
     </div>
+
     <hr style="border-color: #333; margin: 20px 0;">
-    <div class="form-group"><label>Quality Tag:</label><input type="text" name="quality" value="{{ movie.quality or '' }}" /></div>
     <div class="form-group"><input type="checkbox" name="is_trending" value="true" {% if movie.is_trending %}checked{% endif %}><label style="display: inline-block;">Is Trending?</label></div>
     <div class="form-group"><input type="checkbox" name="is_coming_soon" value="true" {% if movie.is_coming_soon %}checked{% endif %}><label style="display: inline-block;">Is Coming Soon?</label></div>
-    <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview }}</textarea></div>
-    <div class="form-group"><label>Poster URL:</label><input type="url" name="poster_url" value="{{ movie.poster }}" /></div>
     <button type="submit">Update Content</button>
   </form>
   <script>
     function toggleEpisodeFields() {
         var isSeries = document.getElementById('content_type').value === 'series';
         document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none';
-        document.getElementById('movie_download_links_group').style.display = isSeries ? 'none' : 'block';
+        document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block';
     }
     function addEpisodeField() {
-        // This function should be the same as in admin_html
+        const container = document.getElementById('episodes_container');
+        const div = document.createElement('div');
+        div.className = 'episode-item';
+        div.innerHTML = `
+            <div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div>
+            <div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div>
+            <div class="form-group"><label>Watch Link (Embed):</label><input type="url" name="episode_watch_link[]" /></div>
+            <hr><p>OR Download Links</p>
+            <div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div>
+            <div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div>
+            <button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>
+        `;
+        container.appendChild(div);
     }
     document.addEventListener('DOMContentLoaded', toggleEpisodeFields);
   </script>
@@ -753,11 +767,11 @@ def home():
     else:
         limit = 18
         context = {
-            "trending_movies": list(movies.find({"is_trending": True}).sort('_id', -1).limit(limit)),
+            "trending_movies": list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
-            "recently_added": list(movies.find().sort('_id', -1).limit(limit)),
+            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "is_full_page_list": False, "query": ""
         }
     
@@ -771,57 +785,104 @@ def home():
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
     try:
-        movie = movies.find_one({"_id": ObjectId(movie_id)})
-        trailer_key = None
-        if movie:
-            movie['_id'] = str(movie['_id'])
-            if TMDB_API_KEY and movie.get("tmdb_id"):
-                tmdb_type = "tv" if movie.get("type") == "series" else "movie"
-                video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{movie['tmdb_id']}/videos?api_key={TMDB_API_KEY}"
+        movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
+        if not movie_obj:
+            return "Content not found", 404
+
+        movie = dict(movie_obj)
+        movie['_id'] = str(movie['_id'])
+        
+        needs_tmdb_update = not movie.get("poster") or not movie.get("overview") or not movie.get("tmdb_id")
+        tmdb_id = movie.get("tmdb_id")
+        tmdb_type = "tv" if movie.get("type") == "series" else "movie"
+        
+        if needs_tmdb_update and TMDB_API_KEY:
+            if not tmdb_id:
+                search_url = f"https://api.themoviedb.org/3/search/{tmdb_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
                 try:
-                    res = requests.get(video_url, timeout=5).json()
-                    for v in res.get("results", []):
-                        if v['type'] == 'Trailer':
-                            trailer_key = v['key']
-                            break
-                except requests.RequestException: pass
+                    search_res = requests.get(search_url, timeout=5).json()
+                    if search_res.get("results"):
+                        tmdb_id = search_res["results"][0].get("id")
+                except requests.RequestException as e:
+                    print(f"TMDb search error for '{movie['title']}': {e}")
+
+            if tmdb_id:
+                detail_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
+                try:
+                    res = requests.get(detail_url, timeout=5).json()
+                    update_fields = {"tmdb_id": tmdb_id}
+                    if res.get("overview"): update_fields["overview"] = movie["overview"] = res["overview"]
+                    if res.get("poster_path"): update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
+                    if res.get("vote_average"): update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
+                    if res.get("genres"): update_fields["genres"] = movie["genres"] = [g['name'] for g in res['genres']]
+                    release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
+                    if release_date: update_fields["release_date"] = movie["release_date"] = release_date
+                    movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
+                except requests.RequestException as e:
+                    print(f"TMDb detail fetch error for '{movie['title']}': {e}")
+        
+        trailer_key = None
+        if tmdb_id:
+            video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}/videos?api_key={TMDB_API_KEY}"
+            try:
+                video_res = requests.get(video_url, timeout=5).json()
+                for v in video_res.get("results", []):
+                    if v['type'] == 'Trailer' and v['site'] == 'YouTube':
+                        trailer_key = v['key']; break
+            except requests.RequestException: pass
+        
         return render_template_string(detail_html, movie=movie, trailer_key=trailer_key)
+        
     except Exception as e:
+        print(f"Error in movie_detail: {e}")
         return render_template_string(detail_html, movie=None, trailer_key=None)
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
     try:
         movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if movie and movie.get("watch_link"):
-            return render_template_string(watch_html, movie=movie)
+        if not movie: return "Content not found.", 404
+
+        watch_link = movie.get("watch_link")
+        title = movie.get("title")
+
+        # Check for episode-specific watch link
+        episode_num = request.args.get('ep')
+        if episode_num and movie.get('type') == 'series' and movie.get('episodes'):
+            for ep in movie['episodes']:
+                if str(ep.get('episode_number')) == episode_num:
+                    watch_link = ep.get('watch_link')
+                    title = f"{title} - E{episode_num}: {ep.get('title')}"
+                    break
+        
+        if watch_link:
+            return render_template_string(watch_html, watch_link=watch_link, title=title)
         return "Watch link not found.", 404
-    except:
-        return "Content not found.", 404
+    except Exception as e:
+        print(f"Watch page error: {e}")
+        return "An error occurred.", 500
 
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
     if request.method == "POST":
-        is_trending = request.form.get("is_trending") == "true"
+        content_type = request.form.get("content_type", "movie")
         movie_data = {
             "title": request.form.get("title"),
-            "watch_link": request.form.get("watch_link", ""),
-            "type": request.form.get("content_type", "movie"),
-            "quality": "TRENDING" if is_trending else request.form.get("quality", "").upper(),
-            "is_trending": is_trending,
+            "type": content_type,
+            "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "overview": request.form.get("overview", "No overview available."),
-            "poster": request.form.get("poster_url", ""), "tmdb_id": None
+            "tmdb_id": None, "poster": None, "overview": None
         }
 
-        if movie_data["type"] == "movie":
+        if content_type == "movie":
+            movie_data["watch_link"] = request.form.get("watch_link", "")
             links = []
-            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p")})
-            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p")})
-            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p")})
+            if request.form.get("link_480p"): links.append({"quality": "480p", "url": request.form.get("link_480p")})
+            if request.form.get("link_720p"): links.append({"quality": "720p", "url": request.form.get("link_720p")})
+            if request.form.get("link_1080p"): links.append({"quality": "1080p", "url": request.form.get("link_1080p")})
             movie_data["links"] = links
-        else: # series
+        else:
             episodes = []
             ep_numbers = request.form.getlist('episode_number[]')
             for i in range(len(ep_numbers)):
@@ -829,9 +890,10 @@ def admin():
                 if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "url": request.form.getlist('episode_link_480p[]')[i]})
                 if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "url": request.form.getlist('episode_link_720p[]')[i]})
                 episodes.append({
-                    "episode_number": int(ep_numbers[i]), "title": request.form.getlist('episode_title[]')[i],
-                    "overview": request.form.getlist('episode_overview[]')[i],
-                    "watch_link": request.form.getlist('episode_watch_link[]')[i], "links": ep_links
+                    "episode_number": int(ep_numbers[i]),
+                    "title": request.form.getlist('episode_title[]')[i],
+                    "watch_link": request.form.getlist('episode_watch_link[]')[i],
+                    "links": ep_links
                 })
             movie_data["episodes"] = episodes
         movies.insert_one(movie_data)
@@ -848,23 +910,20 @@ def edit_movie(movie_id):
     if not movie_obj: return "Movie not found", 404
 
     if request.method == "POST":
-        is_trending = request.form.get("is_trending") == "true"
+        content_type = request.form.get("content_type", "movie")
         update_data = {
             "title": request.form.get("title"),
-            "watch_link": request.form.get("watch_link", ""),
-            "type": request.form.get("content_type", "movie"),
-            "quality": "TRENDING" if is_trending else request.form.get("quality", "").upper(),
-            "is_trending": is_trending,
-            "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "overview": request.form.get("overview", "No overview available."),
-            "poster": request.form.get("poster_url", "")
+            "type": content_type,
+            "is_trending": request.form.get("is_trending") == "true",
+            "is_coming_soon": request.form.get("is_coming_soon") == "true"
         }
         
-        if update_data["type"] == "movie":
+        if content_type == "movie":
+            update_data["watch_link"] = request.form.get("watch_link", "")
             links = []
-            if request.form.get("link_480p"): links.append({"quality": "480p", "size": "N/A", "url": request.form.get("link_480p")})
-            if request.form.get("link_720p"): links.append({"quality": "720p", "size": "N/A", "url": request.form.get("link_720p")})
-            if request.form.get("link_1080p"): links.append({"quality": "1080p", "size": "N/A", "url": request.form.get("link_1080p")})
+            if request.form.get("link_480p"): links.append({"quality": "480p", "url": request.form.get("link_480p")})
+            if request.form.get("link_720p"): links.append({"quality": "720p", "url": request.form.get("link_720p")})
+            if request.form.get("link_1080p"): links.append({"quality": "1080p", "url": request.form.get("link_1080p")})
             update_data["links"] = links
             movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
         else: # series
@@ -876,11 +935,10 @@ def edit_movie(movie_id):
                 if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "url": request.form.getlist('episode_link_720p[]')[i]})
                 episodes.append({
                     "episode_number": int(ep_numbers[i]), "title": request.form.getlist('episode_title[]')[i],
-                    "overview": request.form.getlist('episode_overview[]')[i],
                     "watch_link": request.form.getlist('episode_watch_link[]')[i], "links": ep_links
                 })
             update_data["episodes"] = episodes
-            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": ""}})
+            movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": "", "watch_link": ""}})
         
         movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
         return redirect(url_for('admin'))
@@ -891,7 +949,10 @@ def edit_movie(movie_id):
 @app.route('/delete_movie/<movie_id>')
 @requires_auth
 def delete_movie(movie_id):
-    movies.delete_one({"_id": ObjectId(movie_id)})
+    try:
+        movies.delete_one({"_id": ObjectId(movie_id)})
+    except Exception as e:
+        print(f"Error deleting movie: {e}")
     return redirect(url_for('admin'))
 
 def render_full_list(content_list, title):
@@ -900,7 +961,7 @@ def render_full_list(content_list, title):
 
 @app.route('/trending_movies')
 def trending_movies():
-    return render_full_list(list(movies.find({"is_trending": True}).sort('_id', -1)), "Trending Now")
+    return render_full_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Trending Now")
 
 @app.route('/movies_only')
 def movies_only():
@@ -916,7 +977,7 @@ def coming_soon():
 
 @app.route('/recently_added')
 def recently_added_all():
-    return render_full_list(list(movies.find().sort('_id', -1)), "Recently Added")
+    return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
