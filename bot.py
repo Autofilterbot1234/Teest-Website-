@@ -437,7 +437,7 @@ detail_html = """
       </div>
       <p class="detail-overview">{{ movie.overview }}</p>
       
-      {% if movie.watch_link and not movie.is_coming_soon %}
+      {% if movie.watch_link and movie.type == 'movie' and not movie.is_coming_soon %}
         <a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="watch-now-btn">
             <i class="fas fa-play"></i> Watch Now
         </a>
@@ -547,10 +547,9 @@ admin_html = """
       --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5;
     }
     body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); padding: 20px; }
-    h2 { 
-      font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red);
-      font-size: 2.5rem; margin-bottom: 20px;
-    }
+    h2, h3 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); }
+    h2 { font-size: 2.5rem; margin-bottom: 20px; }
+    h3 { font-size: 1.5rem; margin: 20px 0 10px 0;}
     form { max-width: 800px; margin: 0 auto 40px auto; background: var(--dark-gray); padding: 25px; border-radius: 8px;}
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 8px; font-weight: bold; }
@@ -585,7 +584,7 @@ admin_html = """
 <body>
   <h2>Add New Content</h2>
   <form method="post">
-    <div class="form-group"><label for="title">Title:</label><input type="text" name="title" id="title" required /></div>
+    <div class="form-group"><label for="title">Title (Required):</label><input type="text" name="title" id="title" required /></div>
     <div class="form-group"><label for="content_type">Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="series">TV/Web Series</option></select></div>
     
     <div id="movie_fields">
@@ -600,6 +599,13 @@ admin_html = """
       <h3>Episodes</h3><div id="episodes_container"></div>
       <button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button>
     </div>
+    
+    <hr style="border-color: #333; margin: 20px 0;">
+    <h3>Manual Details (Optional - Leave blank for auto-fetch from TMDb)</h3>
+    <div class="form-group"><label for="poster_url">Poster URL:</label><input type="url" name="poster_url" id="poster_url" /></div>
+    <div class="form-group"><label for="overview">Overview:</label><textarea name="overview" id="overview"></textarea></div>
+    <div class="form-group"><label for="release_date">Release Date (YYYY-MM-DD):</label><input type="text" name="release_date" id="release_date" /></div>
+    <div class="form-group"><label for="genres">Genres (Comma-separated):</label><input type="text" name="genres" id="genres" /></div>
     
     <hr style="border-color: #333; margin: 20px 0;">
     <div class="form-group"><input type="checkbox" name="is_trending" id="is_trending" value="true"><label for="is_trending" style="display: inline-block;">Is Trending?</label></div>
@@ -664,7 +670,9 @@ edit_html = """
       --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5;
     }
     body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); padding: 20px; }
-    h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; margin-bottom: 20px; }
+    h2, h3 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); }
+    h2 { font-size: 2.5rem; margin-bottom: 20px; }
+    h3 { font-size: 1.5rem; margin: 20px 0 10px 0;}
     form { max-width: 800px; margin: 0 auto 40px auto; background: var(--dark-gray); padding: 25px; border-radius: 8px;}
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 8px; font-weight: bold; }
@@ -720,6 +728,13 @@ edit_html = """
         </div>
         <button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button>
     </div>
+
+    <hr style="border-color: #333; margin: 20px 0;">
+    <h3>Manual Details (Update or leave blank for auto-fetch)</h3>
+    <div class="form-group"><label>Poster URL:</label><input type="url" name="poster_url" value="{{ movie.poster or '' }}" /></div>
+    <div class="form-group"><label>Overview:</label><textarea name="overview">{{ movie.overview or '' }}</textarea></div>
+    <div class="form-group"><label>Release Date (YYYY-MM-DD):</label><input type="text" name="release_date" value="{{ movie.release_date or '' }}" /></div>
+    <div class="form-group"><label>Genres (Comma-separated):</label><input type="text" name="genres" value="{{ movie.genres|join(', ') if movie.genres else '' }}" /></div>
 
     <hr style="border-color: #333; margin: 20px 0;">
     <div class="form-group"><input type="checkbox" name="is_trending" value="true" {% if movie.is_trending %}checked{% endif %}><label style="display: inline-block;">Is Trending?</label></div>
@@ -792,11 +807,15 @@ def movie_detail(movie_id):
         movie = dict(movie_obj)
         movie['_id'] = str(movie['_id'])
         
-        needs_tmdb_update = not movie.get("poster") or not movie.get("overview") or not movie.get("tmdb_id")
+        # Check which fields are missing and need to be fetched
+        needs_poster = not movie.get("poster")
+        needs_overview = not movie.get("overview")
+        needs_release_date = not movie.get("release_date")
+        needs_genres = not movie.get("genres")
         tmdb_id = movie.get("tmdb_id")
         tmdb_type = "tv" if movie.get("type") == "series" else "movie"
         
-        if needs_tmdb_update and TMDB_API_KEY:
+        if (needs_poster or needs_overview or needs_release_date or needs_genres or not tmdb_id) and TMDB_API_KEY:
             if not tmdb_id:
                 search_url = f"https://api.themoviedb.org/3/search/{tmdb_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
                 try:
@@ -811,13 +830,22 @@ def movie_detail(movie_id):
                 try:
                     res = requests.get(detail_url, timeout=5).json()
                     update_fields = {"tmdb_id": tmdb_id}
-                    if res.get("overview"): update_fields["overview"] = movie["overview"] = res["overview"]
-                    if res.get("poster_path"): update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
-                    if res.get("vote_average"): update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
-                    if res.get("genres"): update_fields["genres"] = movie["genres"] = [g['name'] for g in res['genres']]
-                    release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
-                    if release_date: update_fields["release_date"] = movie["release_date"] = release_date
-                    movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
+                    
+                    if needs_poster and res.get("poster_path"): 
+                        update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
+                    if needs_overview and res.get("overview"): 
+                        update_fields["overview"] = movie["overview"] = res["overview"]
+                    if res.get("vote_average"): 
+                        update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
+                    if needs_release_date:
+                        release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
+                        if release_date: update_fields["release_date"] = movie["release_date"] = release_date
+                    if needs_genres and res.get("genres"):
+                         update_fields["genres"] = movie["genres"] = [g['name'] for g in res.get("genres", [])]
+
+                    if len(update_fields) > 1: # Only update if new data was found
+                        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
+                        print(f"Updated '{movie['title']}' with data from TMDb.")
                 except requests.RequestException as e:
                     print(f"TMDb detail fetch error for '{movie['title']}': {e}")
         
@@ -846,7 +874,6 @@ def watch_movie(movie_id):
         watch_link = movie.get("watch_link")
         title = movie.get("title")
 
-        # Check for episode-specific watch link
         episode_num = request.args.get('ep')
         if episode_num and movie.get('type') == 'series' and movie.get('episodes'):
             for ep in movie['episodes']:
@@ -857,7 +884,7 @@ def watch_movie(movie_id):
         
         if watch_link:
             return render_template_string(watch_html, watch_link=watch_link, title=title)
-        return "Watch link not found.", 404
+        return "Watch link not found for this content.", 404
     except Exception as e:
         print(f"Watch page error: {e}")
         return "An error occurred.", 500
@@ -867,12 +894,17 @@ def watch_movie(movie_id):
 def admin():
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
+        genres_raw = request.form.get("genres", "")
         movie_data = {
             "title": request.form.get("title"),
             "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "tmdb_id": None, "poster": None, "overview": None
+            "tmdb_id": None,
+            "poster": request.form.get("poster_url", "").strip(),
+            "overview": request.form.get("overview", "").strip(),
+            "release_date": request.form.get("release_date", "").strip(),
+            "genres": [g.strip() for g in genres_raw.split(',') if g.strip()]
         }
 
         if content_type == "movie":
@@ -882,7 +914,7 @@ def admin():
             if request.form.get("link_720p"): links.append({"quality": "720p", "url": request.form.get("link_720p")})
             if request.form.get("link_1080p"): links.append({"quality": "1080p", "url": request.form.get("link_1080p")})
             movie_data["links"] = links
-        else:
+        else: # series
             episodes = []
             ep_numbers = request.form.getlist('episode_number[]')
             for i in range(len(ep_numbers)):
@@ -896,6 +928,7 @@ def admin():
                     "links": ep_links
                 })
             movie_data["episodes"] = episodes
+        
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
@@ -911,11 +944,16 @@ def edit_movie(movie_id):
 
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
+        genres_raw = request.form.get("genres", "")
         update_data = {
             "title": request.form.get("title"),
             "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
-            "is_coming_soon": request.form.get("is_coming_soon") == "true"
+            "is_coming_soon": request.form.get("is_coming_soon") == "true",
+            "poster": request.form.get("poster_url", "").strip(),
+            "overview": request.form.get("overview", "").strip(),
+            "release_date": request.form.get("release_date", "").strip(),
+            "genres": [g.strip() for g in genres_raw.split(',') if g.strip()]
         }
         
         if content_type == "movie":
