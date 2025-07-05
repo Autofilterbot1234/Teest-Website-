@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests
@@ -59,8 +59,6 @@ except Exception as e:
 
 
 # --- START OF index_html TEMPLATE ---
-# index_html আগের মতোই থাকবে, তাই এখানে 다시 পেস্ট করছি না।
-# (The index_html template remains the same, so I'm not pasting it again for brevity)
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -128,33 +126,6 @@ index_html = """
   .btn:hover { opacity: 0.8; }
 
   main { padding-top: 0; padding-bottom: 50px; }
-  .carousel-row { margin: 40px 0; position: relative; }
-  .carousel-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin: 0 50px 15px 50px;
-  }
-  .carousel-title { font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 1.6rem; margin: 0; }
-  .see-all-link { color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
-  .see-all-link:hover { color: var(--text-light); }
-  .carousel-wrapper { position: relative; }
-  .carousel-content {
-      display: flex; gap: 10px; padding: 0 50px; overflow-x: scroll;
-      scrollbar-width: none; -ms-overflow-style: none; scroll-behavior: smooth;
-  }
-  .carousel-content::-webkit-scrollbar { display: none; }
-
-  .carousel-arrow {
-      position: absolute; top: 0; height: 100%; transform: translateY(0);
-      background-color: rgba(20, 20, 20, 0.5); border: none; color: white;
-      font-size: 2.5rem; cursor: pointer; z-index: 10; width: 50px;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.3s ease;
-  }
-  .carousel-row:hover .carousel-arrow { opacity: 1; }
-  .carousel-arrow.prev { left: 0; }
-  .carousel-arrow.next { right: 0; }
-  .carousel-arrow:hover { background-color: rgba(20, 20, 20, 0.8); }
-
   .movie-card {
       flex: 0 0 16.66%; min-width: 220px; border-radius: 4px; overflow: hidden;
       cursor: pointer; transition: transform 0.2s ease; position: relative; background-color: #222;
@@ -197,7 +168,6 @@ index_html = """
       .hero-title { font-size: 2.8rem; }
       .hero-overview { display: none; }
       .hero-buttons .btn { padding: 8px 18px; font-size: 0.9rem; }
-      .carousel-arrow { display: none; }
       .carousel-row { margin: 25px 0; }
       .carousel-header { margin: 0 15px 10px 15px; }
       .carousel-title { font-size: 1.2rem; }
@@ -208,6 +178,7 @@ index_html = """
       .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
       .bottom-nav { display: flex; }
   }
+  .carousel-row { margin: 40px 0; position: relative; } .carousel-header { display: flex; justify-content: space-between; align-items: center; margin: 0 50px 15px 50px; } .carousel-title { font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 1.6rem; margin: 0; } .see-all-link { color: var(--text-dark); font-weight: 700; font-size: 0.9rem; } .see-all-link:hover { color: var(--text-light); } .carousel-wrapper { position: relative; } .carousel-content { display: flex; gap: 10px; padding: 0 50px; overflow-x: scroll; scrollbar-width: none; -ms-overflow-style: none; scroll-behavior: smooth; } .carousel-content::-webkit-scrollbar { display: none; } .carousel-arrow { position: absolute; top: 0; bottom:0; margin: auto; height: 100px; background-color: rgba(20, 20, 20, 0.5); border: none; color: white; font-size: 2.5rem; cursor: pointer; z-index: 10; width: 50px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; } .carousel-row:hover .carousel-arrow { opacity: 1; } .carousel-arrow.prev { left: 0; border-radius: 0 4px 4px 0;} .carousel-arrow.next { right: 0; border-radius: 4px 0 0 4px;} .carousel-arrow:hover { background-color: rgba(20, 20, 20, 0.8); }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
 </head>
@@ -250,24 +221,6 @@ index_html = """
       </div>
     {% endif %}
 
-    {% macro render_carousel(title, movies_list, endpoint) %}
-      {% if movies_list %}
-      <div class="carousel-row">
-        <div class="carousel-header">
-          <h2 class="carousel-title">{{ title }}</h2>
-          {% if endpoint %}<a href="{{ url_for(endpoint) }}" class="see-all-link">See All ></a>{% endif %}
-        </div>
-        <div class="carousel-wrapper">
-          <div class="carousel-content">
-            {% for m in movies_list %}<a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card"><img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}"></a>{% endfor %}
-          </div>
-          <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
-          <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
-        </div>
-      </div>
-      {% endif %}
-    {% endmacro %}
-    
     {{ render_carousel('Trending Now', trending_movies, 'trending_movies') }}
     {{ render_carousel('Latest Movies', latest_movies, 'movies_only') }}
     {{ render_carousel('Web Series', latest_series, 'webseries') }}
@@ -308,7 +261,7 @@ index_html = """
 # --- END OF index_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (UPDATED) ---
+# --- START OF detail_html TEMPLATE ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -326,6 +279,7 @@ detail_html = """
   body { font-family: 'Roboto', sans-serif; background: var(--netflix-black); color: var(--text-light); }
   .detail-header {
       position: absolute; top: 0; left: 0; right: 0; padding: 20px 50px; z-index: 100;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7) 10%, rgba(0,0,0,0));
   }
   .back-button {
       color: var(--text-light); font-size: 1.2rem; font-weight: 700; text-decoration: none;
@@ -381,7 +335,7 @@ detail_html = """
   .season-tab.active { background-color: var(--netflix-red); border-color: var(--netflix-red); }
   .episode-list { display: none; }
   .episode-list.active { display: block; }
-  .episode-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 5px; border-left: 3px solid #333; }
+  .episode-item { background: #1a1a1a; padding: 15px; margin-bottom: 10px; border-radius: 5px; border-left: 3px solid #333; transition: border-left-color 0.2s; }
   .episode-item:hover { border-left-color: var(--netflix-red); }
   .episode-title { font-size: 1.1rem; font-weight: 500; margin-bottom: 8px; color: #fff; }
   .episode-links { margin-top: 10px; }
@@ -389,7 +343,6 @@ detail_html = """
   /* Related Content Carousel */
   .related-content { padding: 50px; }
   main { padding: 0 } /* Reset main padding */
-  /* Re-use carousel styles from index */
   .carousel-row { margin: 40px 0; position: relative; } .carousel-header { display: flex; justify-content: space-between; align-items: center; margin: 0 0 15px 0; } .carousel-title { font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 1.6rem; margin: 0; } .see-all-link { display: none; } .carousel-wrapper { position: relative; } .carousel-content { display: flex; gap: 10px; padding: 0 5px; overflow-x: scroll; scrollbar-width: none; -ms-overflow-style: none; scroll-behavior: smooth; } .carousel-content::-webkit-scrollbar { display: none; } .movie-card { flex: 0 0 16.66%; min-width: 200px; border-radius: 4px; overflow: hidden; cursor: pointer; transition: transform 0.2s ease; position: relative; background-color: #222; } .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
 
   @media (max-width: 992px) {
@@ -432,8 +385,8 @@ detail_html = """
       {% if not movie.is_coming_soon %}
         {% if movie.type == 'movie' and movie.watch_link %}
             <a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="watch-now-btn"><i class="fas fa-play"></i> Watch Movie</a>
-        {% elif movie.type == 'series' and seasons and seasons[1] and seasons[1][0].watch_link %}
-            <a href="{{ url_for('watch_movie', movie_id=movie._id, s=1, ep=1) }}" class="watch-now-btn"><i class="fas fa-play"></i> Watch S01 E01</a>
+        {% elif movie.type == 'series' and seasons and seasons[seasons.keys()|sort|first] and seasons[seasons.keys()|sort|first][0].watch_link %}
+            <a href="{{ url_for('watch_movie', movie_id=movie._id, s=seasons.keys()|sort|first, ep=seasons[seasons.keys()|sort|first]|sort(attribute='episode_number')|first.episode_number) }}" class="watch-now-btn"><i class="fas fa-play"></i> Start Watching</a>
         {% endif %}
       {% endif %}
 
@@ -489,7 +442,6 @@ detail_html = """
 
 {% if related_content %}
 <div class="related-content">
-    {% from 'macros.html' import render_carousel %}
     {{ render_carousel('You May Also Like', related_content, None) }}
 </div>
 {% endif %}
@@ -515,7 +467,7 @@ document.querySelectorAll('.season-tab').forEach(tab => {
 # --- END OF detail_html TEMPLATE ---
 
 
-# --- START OF watch_html TEMPLATE (UPDATED) ---
+# --- START OF watch_html TEMPLATE ---
 watch_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -586,27 +538,27 @@ watch_html = """
     const seasonSelector = document.getElementById('seasonSelector');
     const episodeLinks = document.querySelectorAll('.episode-list-item a');
 
-    function switchEpisode(link, title) {
+    function switchEpisode(link, title, clickedElement) {
         if (player && link) {
             player.src = link;
             document.title = "Watching: " + title;
-            // Update active state
             document.querySelectorAll('.episode-list-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.parentElement.classList.add('active');
+            clickedElement.parentElement.classList.add('active');
         }
     }
 
     if (seasonSelector) {
         seasonSelector.addEventListener('change', function() {
             document.querySelectorAll('.episode-list').forEach(list => list.style.display = 'none');
-            document.getElementById(`season-${this.value}-list`).style.display = 'block';
+            const selectedSeasonList = document.getElementById(`season-${this.value}-list`);
+            if(selectedSeasonList) selectedSeasonList.style.display = 'block';
         });
     }
     
     episodeLinks.forEach(link => {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            switchEpisode(this.dataset.watchLink, this.dataset.title);
+            switchEpisode(this.dataset.watchLink, this.dataset.title, this);
         });
     });
 
@@ -617,7 +569,7 @@ watch_html = """
 # --- END OF watch_html TEMPLATE ---
 
 
-# --- START OF admin_html TEMPLATE (UPDATED with Season) ---
+# --- START OF admin_html TEMPLATE ---
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -725,7 +677,7 @@ admin_html = """
 # --- END OF admin_html TEMPLATE ---
 
 
-# --- START OF edit_html TEMPLATE (UPDATED with Season) ---
+# --- START OF edit_html TEMPLATE ---
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -830,16 +782,39 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
-# ----------------- Flask Routes (UPDATED) -----------------
+# --- START OF macros_html TEMPLATE ---
+macros_html = """
+{% macro render_carousel(title, movies_list, endpoint) %}
+  {% if movies_list %}
+  <div class="carousel-row">
+    <div class="carousel-header">
+      <h2 class="carousel-title">{{ title }}</h2>
+      {% if endpoint %}<a href="{{ url_for(endpoint) }}" class="see-all-link">See All ></a>{% endif %}
+    </div>
+    <div class="carousel-wrapper">
+      <div class="carousel-content">
+        {% for m in movies_list %}<a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card"><img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}"></a>{% endfor %}
+      </div>
+      {% if movies_list|length > 5 %}
+      <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
+      <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+"""
+# --- END OF macros_html TEMPLATE ---
+
+
+# ----------------- Flask Routes (UPDATED and FIXED) -----------------
 
 # Helper function to fetch TMDb data
 def fetch_tmdb_data(movie):
     if not TMDB_API_KEY:
-        return movie, None # Return movie as is and no trailer
+        return movie, None
 
     tmdb_type = "tv" if movie.get("type") == "series" else "movie"
-    
-    # Search for TMDB ID if not present
     tmdb_id = movie.get("tmdb_id")
     if not tmdb_id:
         try:
@@ -855,8 +830,7 @@ def fetch_tmdb_data(movie):
 
     update_fields = {"tmdb_id": tmdb_id}
     try:
-        # Fetch main details
-        detail_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
+        detail_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}&append_to_response=videos"
         res = requests.get(detail_url, timeout=5).json()
 
         if not movie.get("poster") and res.get("poster_path"):
@@ -871,17 +845,13 @@ def fetch_tmdb_data(movie):
         if res.get("vote_average"):
             update_fields["vote_average"] = res.get("vote_average")
 
-        # Update the database and the local movie object
         if len(update_fields) > 1:
             movies.update_one({"_id": movie["_id"]}, {"$set": update_fields})
             movie.update(update_fields)
             print(f"Updated '{movie['title']}' with data from TMDb.")
 
-        # Fetch trailer
-        video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}/videos?api_key={TMDB_API_KEY}"
-        video_res = requests.get(video_url, timeout=5).json()
         trailer_key = None
-        for v in video_res.get("results", []):
+        for v in res.get("videos", {}).get("results", []):
             if v['type'] == 'Trailer' and v['site'] == 'YouTube':
                 trailer_key = v['key']
                 break
@@ -891,58 +861,34 @@ def fetch_tmdb_data(movie):
         print(f"TMDb detail fetch error for ID '{tmdb_id}': {e}")
         return movie, None
 
-
 @app.route('/')
 def home():
     query = request.args.get('q')
     context = {}
+    try:
+        if query:
+            movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
+            context = { "movies": movies_list, "query": f'Results for "{query}"', "is_full_page_list": True }
+        else:
+            limit = 18
+            context = {
+                "trending_movies": list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+                "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+                "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+                "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
+                "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+                "is_full_page_list": False, "query": ""
+            }
+        
+        for key, value in context.items():
+            if isinstance(value, list):
+                for item in value:
+                    if '_id' in item: item['_id'] = str(item['_id'])
 
-    if query:
-        movies_list = list(movies.find({"title": {"$regex": query, "$options": "i"}}).sort('_id', -1))
-        context = { "movies": movies_list, "query": f'Results for "{query}"', "is_full_page_list": True }
-    else:
-        limit = 18
-        context = {
-            "trending_movies": list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
-            "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
-            "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
-            "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
-            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
-            "is_full_page_list": False, "query": ""
-        }
-    
-    # Convert ObjectIDs to strings for JSON serialization in templates
-    for key, value in context.items():
-        if isinstance(value, list):
-            for item in value:
-                if '_id' in item: item['_id'] = str(item['_id'])
-
-    # Create a macro for rendering carousels inside the template context
-    # This allows the related content on the detail page to use the same macro
-    macros_template = """
-    {% macro render_carousel(title, movies_list, endpoint) %}
-      {% if movies_list %}
-      <div class="carousel-row">
-        <div class="carousel-header">
-          <h2 class="carousel-title">{{ title }}</h2>
-          {% if endpoint %}<a href="{{ url_for(endpoint) }}" class="see-all-link">See All ></a>{% endif %}
-        </div>
-        <div class="carousel-wrapper">
-          <div class="carousel-content">
-            {% for m in movies_list %}<a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card"><img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}"></a>{% endfor %}
-          </div>
-          {% if movies_list|length > 5 %}
-          <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
-          <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
-          {% endif %}
-        </div>
-      </div>
-      {% endif %}
-    {% endmacro %}
-    """
-    app.jinja_env.from_string(macros_template, globals={"url_for": url_for}).get_template("").new_context().vars # Load macro
-    app.jinja_env.add_extension('jinja2.ext.do')
-    return render_template_string(index_html, **context)
+        return render_template_string(macros_html + index_html, **context)
+    except Exception as e:
+        print(f"Error in home route: {e}")
+        return "An unexpected error occurred on the homepage.", 500
 
 @app.route('/movie/<movie_id>')
 def movie_detail(movie_id):
@@ -951,35 +897,31 @@ def movie_detail(movie_id):
         if not movie_obj:
             return "Content not found", 404
 
-        # Fetch TMDB data if needed and get trailer key
         movie_obj, trailer_key = fetch_tmdb_data(movie_obj)
         
         movie = dict(movie_obj)
         movie['_id'] = str(movie['_id'])
         
-        # Group episodes by season for series
         seasons = None
         if movie.get('type') == 'series' and movie.get('episodes'):
             seasons = defaultdict(list)
             for ep in movie['episodes']:
                 seasons[ep['season_number']].append(ep)
 
-        # Fetch related content
         related_content = []
         if movie.get('genres'):
             related_content = list(movies.find({
                 "genres": {"$in": movie['genres']},
-                "_id": {"$ne": ObjectId(movie_id)}, # Exclude the current movie
+                "_id": {"$ne": ObjectId(movie_id)},
                 "is_coming_soon": {"$ne": True}
             }).limit(12))
             for m in related_content: m['_id'] = str(m['_id'])
-
-        return render_template_string(detail_html, movie=movie, seasons=seasons, trailer_key=trailer_key, related_content=related_content)
+        
+        return render_template_string(macros_html + detail_html, movie=movie, seasons=seasons, trailer_key=trailer_key, related_content=related_content)
         
     except Exception as e:
         print(f"Error in movie_detail for ID {movie_id}: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None)
-
+        return render_template_string(macros_html + detail_html, movie=None, trailer_key=None, related_content=None)
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
@@ -990,7 +932,6 @@ def watch_movie(movie_id):
         title = movie.get("title")
         
         if movie.get('type') == 'movie':
-            # For movies, there is only one watch link
             episode_data = {'watch_link': movie.get('watch_link')}
             return render_template_string(watch_html, movie=movie, title=title, current_episode=episode_data, seasons=None)
 
@@ -998,12 +939,10 @@ def watch_movie(movie_id):
             if not movie.get('episodes'):
                 return "No episodes found for this series.", 404
             
-            # Group episodes by season
             seasons = defaultdict(list)
             for ep in movie['episodes']:
                 seasons[ep['season_number']].append(ep)
 
-            # Determine which episode to play
             req_season = request.args.get('s', type=int)
             req_episode = request.args.get('ep', type=int)
             
@@ -1011,12 +950,10 @@ def watch_movie(movie_id):
             if req_season and req_episode:
                 for ep in movie['episodes']:
                     if ep.get('season_number') == req_season and ep.get('episode_number') == req_episode:
-                        current_episode = ep
-                        break
+                        current_episode = ep; break
             
-            # If no specific episode is requested, play the first available one
             if not current_episode:
-                # Sort seasons and episodes to find the very first one
+                if not seasons: return "No seasons available.", 404
                 first_season_num = sorted(seasons.keys())[0]
                 first_episode = sorted(seasons[first_season_num], key=lambda x: x['episode_number'])[0]
                 current_episode = first_episode
@@ -1034,44 +971,30 @@ def watch_movie(movie_id):
 
 def process_form_data(form):
     content_type = form.get("content_type", "movie")
-    genres_raw = form.get("genres", "")
     data = {
-        "title": form.get("title"),
-        "type": content_type,
-        "is_trending": form.get("is_trending") == "true",
-        "is_coming_soon": form.get("is_coming_soon") == "true",
-        "tmdb_id": None,
-        "poster": form.get("poster_url", "").strip(),
-        "overview": form.get("overview", "").strip(),
+        "title": form.get("title"), "type": content_type,
+        "is_trending": form.get("is_trending") == "true", "is_coming_soon": form.get("is_coming_soon") == "true",
+        "tmdb_id": None, "poster": form.get("poster_url", "").strip(), "overview": form.get("overview", "").strip(),
         "release_date": form.get("release_date", "").strip(),
-        "genres": [g.strip() for g in genres_raw.split(',') if g.strip()]
+        "genres": [g.strip() for g in form.get("genres", "").split(',') if g.strip()]
     }
-
     if content_type == "movie":
-        data["watch_link"] = form.get("watch_link", "")
         links = []
         if form.get("link_480p"): links.append({"quality": "480p", "url": form.get("link_480p")})
         if form.get("link_720p"): links.append({"quality": "720p", "url": form.get("link_720p")})
         if form.get("link_1080p"): links.append({"quality": "1080p", "url": form.get("link_1080p")})
-        data["links"] = links
-    else:  # series
+        data["watch_link"] = form.get("watch_link", ""); data["links"] = links
+    else:
         episodes = []
-        # A hidden input 'episode_indices' holds the unique counter for each episode block
-        episode_indices = form.getlist('episode_indices')
-        for i in episode_indices:
+        for i in form.getlist('episode_indices'):
             ep_links = []
             if form.get(f'episode_link_480p_{i}'): ep_links.append({"quality": "480p", "url": form.get(f'episode_link_480p_{i}')})
             if form.get(f'episode_link_720p_{i}'): ep_links.append({"quality": "720p", "url": form.get(f'episode_link_720p_{i}')})
-            
             episodes.append({
-                "season_number": int(form.get(f'season_number_{i}')),
-                "episode_number": int(form.get(f'episode_number_{i}')),
-                "title": form.get(f'episode_title_{i}'),
-                "watch_link": form.get(f'episode_watch_link_{i}'),
-                "links": ep_links
+                "season_number": int(form.get(f'season_number_{i}')), "episode_number": int(form.get(f'episode_number_{i}')),
+                "title": form.get(f'episode_title_{i}'), "watch_link": form.get(f'episode_watch_link_{i}'), "links": ep_links
             })
         data["episodes"] = episodes
-    
     return data
 
 @app.route('/admin', methods=["GET", "POST"])
@@ -1081,7 +1004,6 @@ def admin():
         movie_data = process_form_data(request.form)
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
-    
     all_content = list(movies.find().sort('_id', -1))
     for m in all_content: m['_id'] = str(m['_id'])
     return render_template_string(admin_html, movies=all_content)
@@ -1091,19 +1013,14 @@ def admin():
 def edit_movie(movie_id):
     movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
     if not movie_obj: return "Movie not found", 404
-
     if request.method == "POST":
         update_data = process_form_data(request.form)
-        
-        # Unset fields that are not relevant for the new type
         if update_data["type"] == "movie":
             movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
-        else: # series
+        else:
             movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"links": "", "watch_link": ""}})
-        
         movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
         return redirect(url_for('admin'))
-    
     movie_obj['_id'] = str(movie_obj['_id'])
     return render_template_string(edit_html, movie=movie_obj)
 
@@ -1111,37 +1028,30 @@ def edit_movie(movie_id):
 @requires_auth
 def delete_movie(movie_id):
     try:
-        result = movies.delete_one({"_id": ObjectId(movie_id)})
-        if result.deleted_count == 0:
-            print(f"Warning: Could not find movie with ID {movie_id} to delete.")
+        movies.delete_one({"_id": ObjectId(movie_id)})
     except Exception as e:
         print(f"Error deleting movie: {e}")
     return redirect(url_for('admin'))
 
 def render_full_list(content_list, title):
     for m in content_list: m['_id'] = str(m['_id'])
-    return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
+    return render_template_string(macros_html + index_html, movies=content_list, query=title, is_full_page_list=True)
 
 @app.route('/trending_movies')
 def trending_movies():
     return render_full_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Trending Now")
-
 @app.route('/movies_only')
 def movies_only():
     return render_full_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Movies")
-
 @app.route('/webseries')
 def webseries():
     return render_full_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Web Series")
-
 @app.route('/coming_soon')
 def coming_soon():
     return render_full_list(list(movies.find({"is_coming_soon": True}).sort('_id', -1)), "Coming Soon")
-
 @app.route('/recently_added')
 def recently_added_all():
     return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
