@@ -3,3 +3,4 @@ pymongo
 requests
 jinja2
 python-dotenv
+python telegram_bot
