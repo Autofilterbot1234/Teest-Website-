@@ -1,6 +1,6 @@
 flask
+gunicorn
 pymongo
-requests
-jinja2
 python-dotenv
-python telegram_bot
+requests
+python-telegram-bot
