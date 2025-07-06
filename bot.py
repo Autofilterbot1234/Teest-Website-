@@ -1,9 +1,11 @@
+# app.py
 from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
+from telegram import Bot
 
 # .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
@@ -15,6 +17,7 @@ MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # --- অ্যাডমিন অথেন্টিকেশন ফাংশন ---
 def check_auth(username, password):
@@ -37,8 +40,9 @@ def requires_auth(f):
 # --- অথেন্টিকেশন শেষ ---
 
 # Check if environment variables are set
-if not MONGO_URI or not TMDB_API_KEY:
-    print("Error: MONGO_URI and TMDB_API_KEY environment variables must be set. Exiting.")
+if not all([MONGO_URI, TMDB_API_KEY, TELEGRAM_BOT_TOKEN, ADMIN_USERNAME, ADMIN_PASSWORD]):
+    print("Error: One or more required environment variables are missing.")
+    print("Required: MONGO_URI, TMDB_API_KEY, TELEGRAM_BOT_TOKEN, ADMIN_USERNAME, ADMIN_PASSWORD")
     exit(1)
 
 # Database connection
@@ -46,7 +50,6 @@ try:
     client = MongoClient(MONGO_URI)
     db = client["movie_db"]
     movies = db["movies"]
-    # === বিজ্ঞাপন কোড সংরক্ষণের জন্য নতুন সেটিংস কালেকশন ===
     settings = db["settings"]
     print("Successfully connected to MongoDB!")
 except Exception as e:
@@ -325,9 +328,9 @@ index_html = """
     
     {% if recently_added %}
       <div class="hero-section">
-        {% for movie in recently_added %}
+        {% for movie in recently_added | selectattr('poster') | list | islice(5) %}
           <div class="hero-slide {% if loop.first %}active{% endif %}" 
-               style="background-image: url('{{ movie.poster or '' }}');">
+               style="background-image: url('{{ movie.poster }}');">
             <div class="hero-content">
               <h1 class="hero-title">{{ movie.title }}</h1>
               <p class="hero-overview">{{ movie.overview }}</p>
@@ -576,7 +579,7 @@ detail_html = """
 </head>
 <body>
 <header class="detail-header">
-  <a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a>
+  <a href="{{ request.referrer or url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back</a>
 </header>
 {% if movie %}
 <div class="detail-hero">
@@ -692,19 +695,29 @@ watch_html = """
 <style>
     body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
     .player-container { width: 100%; height: 100%; }
-    .player-container iframe { width: 100%; height: 100%; border: 0; }
+    #player-iframe { width: 100%; height: 100%; border: 0; }
 </style>
 </head>
 <body>
     <div class="player-container">
-        <iframe 
-            src="{{ watch_link }}" 
-            allowfullscreen 
-            allowtransparency 
-            allow="autoplay"
-            scrolling="no" 
-            frameborder="0">
-        </iframe>
+        <!-- If the link is a direct video link, use a video tag -->
+        {% if is_direct_link %}
+            <video id="player-iframe" controls autoplay>
+                <source src="{{ watch_link }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        <!-- Otherwise, use an iframe for embeddable players -->
+        {% else %}
+            <iframe 
+                id="player-iframe"
+                src="{{ watch_link }}" 
+                allowfullscreen 
+                allowtransparency 
+                allow="autoplay"
+                scrolling="no" 
+                frameborder="0">
+            </iframe>
+        {% endif %}
     </div>
 
     <!-- === Pop-under এবং Social Bar বিজ্ঞাপনের জন্য স্ক্রিপ্ট === -->
@@ -1020,19 +1033,17 @@ def movie_detail(movie_id):
     try:
         movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie_obj:
-            return "Content not found", 404
+            return render_template_string(detail_html, movie=None, trailer_key=None), 404
 
         movie = dict(movie_obj)
         movie['_id'] = str(movie['_id'])
         
-        needs_poster = not movie.get("poster")
-        needs_overview = not movie.get("overview")
-        needs_release_date = not movie.get("release_date")
-        needs_genres = not movie.get("genres")
+        # Auto-fetch logic from TMDb if details are missing
+        needs_update = not all(k in movie and movie[k] for k in ["poster", "overview", "release_date", "genres"])
         tmdb_id = movie.get("tmdb_id")
         tmdb_type = "tv" if movie.get("type") == "series" else "movie"
         
-        if (needs_poster or needs_overview or needs_release_date or needs_genres or not tmdb_id) and TMDB_API_KEY:
+        if needs_update and TMDB_API_KEY:
             if not tmdb_id:
                 search_url = f"https://api.themoviedb.org/3/search/{tmdb_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
                 try:
@@ -1048,16 +1059,16 @@ def movie_detail(movie_id):
                     res = requests.get(detail_url, timeout=5).json()
                     update_fields = {"tmdb_id": tmdb_id}
                     
-                    if needs_poster and res.get("poster_path"): 
+                    if not movie.get("poster") and res.get("poster_path"): 
                         update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
-                    if needs_overview and res.get("overview"): 
+                    if not movie.get("overview") and res.get("overview"): 
                         update_fields["overview"] = movie["overview"] = res["overview"]
-                    if res.get("vote_average"): 
+                    if not movie.get("vote_average") and res.get("vote_average"): 
                         update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
-                    if needs_release_date:
+                    if not movie.get("release_date"):
                         release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
                         if release_date: update_fields["release_date"] = movie["release_date"] = release_date
-                    if needs_genres and res.get("genres"):
+                    if not movie.get("genres") and res.get("genres"):
                          update_fields["genres"] = movie["genres"] = [g['name'] for g in res.get("genres", [])]
 
                     if len(update_fields) > 1:
@@ -1066,6 +1077,7 @@ def movie_detail(movie_id):
                 except requests.RequestException as e:
                     print(f"TMDb detail fetch error for '{movie['title']}': {e}")
         
+        # Fetch trailer key
         trailer_key = None
         if tmdb_id:
             video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}/videos?api_key={TMDB_API_KEY}"
@@ -1080,7 +1092,7 @@ def movie_detail(movie_id):
         
     except Exception as e:
         print(f"Error in movie_detail: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None)
+        return render_template_string(detail_html, movie=None, trailer_key=None), 500
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
@@ -1100,7 +1112,10 @@ def watch_movie(movie_id):
                     break
         
         if watch_link:
-            return render_template_string(watch_html, watch_link=watch_link, title=title)
+            # Check if the link is a direct video link (from our stream/download routes)
+            is_direct = watch_link.startswith(url_for('stream_file', file_id='', _external=True).rsplit('/', 1)[0])
+            return render_template_string(watch_html, watch_link=watch_link, title=title, is_direct_link=is_direct)
+            
         return "Watch link not found for this content.", 404
     except Exception as e:
         print(f"Watch page error: {e}")
@@ -1150,13 +1165,10 @@ def admin():
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    # অ্যাডমিন টেমপ্লেটের জন্য সব কনটেন্ট পাস করা হচ্ছে
     all_content = list(movies.find().sort('_id', -1))
     for m in all_content: m['_id'] = str(m['_id'])
-    # ad_settings context processor থেকে স্বয়ংক্রিয়ভাবে পাস হবে, তাই এখানে আলাদা করে পাস করার দরকার নেই।
     return render_template_string(admin_html, all_content=all_content)
 
-# === নতুন রুট: বিজ্ঞাপন কোড সেভ করার জন্য ===
 @app.route('/admin/save_ads', methods=['POST'])
 @requires_auth
 def save_ads():
@@ -1166,7 +1178,6 @@ def save_ads():
         "banner_ad_code": request.form.get("banner_ad_code", "").strip(),
         "native_banner_code": request.form.get("native_banner_code", "").strip()
     }
-    # upsert=True ব্যবহার করে ডেটাবেসে ডেটা আপডেট বা ইনসার্ট করা হচ্ছে
     settings.update_one({}, {"$set": ad_codes}, upsert=True)
     return redirect(url_for('admin'))
 
@@ -1232,15 +1243,15 @@ def render_full_list(content_list, title):
     for m in content_list: m['_id'] = str(m['_id'])
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
 
-@app.route('/trending_movies')
+@app.route('/trending')
 def trending_movies():
     return render_full_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Trending Now")
 
-@app.route('/movies_only')
+@app.route('/movies')
 def movies_only():
     return render_full_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Movies")
 
-@app.route('/webseries')
+@app.route('/series')
 def webseries():
     return render_full_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Web Series")
 
@@ -1251,6 +1262,53 @@ def coming_soon():
 @app.route('/recently_added')
 def recently_added_all():
     return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
+
+# ====================================================================
+# <<< নতুন যোগ করা অংশ: টেলিগ্রাম থেকে ফাইল পরিবেশন করার জন্য >>>
+# ====================================================================
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+@app.route('/stream/<file_id>')
+def stream_file(file_id):
+    try:
+        tg_file = bot.get_file(file_id)
+        file_url = tg_file.file_path
+        
+        req = requests.get(file_url, stream=True)
+        # Streaming response
+        return Response(req.iter_content(chunk_size=1024*1024), mimetype=req.headers['Content-Type'])
+    except Exception as e:
+        print(f"Streaming error for file_id {file_id}: {e}")
+        return "Error: Could not stream the file. The link might have expired or the bot token is invalid.", 404
+
+@app.route('/download/<file_id>')
+def download_file(file_id):
+    try:
+        tg_file = bot.get_file(file_id)
+        
+        # বট থেকে ফাইলের আসল নাম পাওয়া
+        file_info_url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}'
+        file_info_res = requests.get(file_info_url).json()
+        if not file_info_res.get('ok'):
+             raise Exception(f"Failed to get file info: {file_info_res.get('description')}")
+        
+        original_filename = os.path.basename(file_info_res['result']['file_path'])
+
+        req = requests.get(tg_file.file_path, stream=True)
+        
+        # Download response
+        return Response(
+            req.iter_content(chunk_size=1024*1024), 
+            mimetype=req.headers['Content-Type'],
+            headers={"Content-Disposition": f"attachment;filename=\"{original_filename}\""}
+        )
+    except Exception as e:
+        print(f"Download error for file_id {file_id}: {e}")
+        return "Error: Could not process the download.", 404
+# ====================================================================
+# <<< নতুন অংশের সমাপ্তি >>>
+# ====================================================================
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
