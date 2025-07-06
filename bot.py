@@ -61,11 +61,10 @@ except Exception as e:
 @app.context_processor
 def inject_ads():
     ad_codes = settings.find_one()
-    # যদি ডেটাবেসে কোনো কোড না থাকে, তাহলে একটি খালি ডিকশনারি পাস করা হবে
     return dict(ad_settings=(ad_codes or {}))
 
 
-# --- START OF index_html TEMPLATE (বিজ্ঞাপন যোগ করা হয়েছে) ---
+# --- START OF index_html TEMPLATE (islice ফিক্স করা হয়েছে) ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -326,9 +325,9 @@ index_html = """
     </div>
   {% else %} {# Homepage with carousels #}
     
-    {% if recently_added %}
+    {% if hero_movies %}
       <div class="hero-section">
-        {% for movie in recently_added | selectattr('poster') | list | islice(5) %}
+        {% for movie in hero_movies %}
           <div class="hero-slide {% if loop.first %}active{% endif %}" 
                style="background-image: url('{{ movie.poster }}');">
             <div class="hero-content">
@@ -450,7 +449,7 @@ index_html = """
 # --- END OF index_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (বিজ্ঞাপন যোগ করা হয়েছে) ---
+# --- START OF detail_html TEMPLATE ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -684,7 +683,7 @@ function copyToClipboard(text) {
 # --- END OF detail_html TEMPLATE ---
 
 
-# --- START OF watch_html TEMPLATE (বিজ্ঞাপন যোগ করা হয়েছে) ---
+# --- START OF watch_html TEMPLATE ---
 watch_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -695,21 +694,18 @@ watch_html = """
 <style>
     body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
     .player-container { width: 100%; height: 100%; }
-    #player-iframe { width: 100%; height: 100%; border: 0; }
+    .player-container iframe, .player-container video { width: 100%; height: 100%; border: 0; }
 </style>
 </head>
 <body>
     <div class="player-container">
-        <!-- If the link is a direct video link, use a video tag -->
         {% if is_direct_link %}
-            <video id="player-iframe" controls autoplay>
+            <video controls autoplay>
                 <source src="{{ watch_link }}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
-        <!-- Otherwise, use an iframe for embeddable players -->
         {% else %}
             <iframe 
-                id="player-iframe"
                 src="{{ watch_link }}" 
                 allowfullscreen 
                 allowtransparency 
@@ -733,7 +729,7 @@ watch_html = """
 # --- END OF watch_html TEMPLATE ---
 
 
-# --- START OF admin_html TEMPLATE (বিজ্ঞাপন সেকশন যোগ করা হয়েছে) ---
+# --- START OF admin_html TEMPLATE ---
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -1000,7 +996,7 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
-# ----------------- Flask Routes (আপডেট করা হয়েছে) -----------------
+# ----------------- Flask Routes (islice ফিক্স করা হয়েছে) -----------------
 
 @app.route('/')
 def home():
@@ -1012,13 +1008,21 @@ def home():
         context = { "movies": movies_list, "query": f'Results for "{query}"', "is_full_page_list": True }
     else:
         limit = 18
+        # সম্প্রতি যোগ করা মুভির তালিকা আলাদাভাবে নিন
+        all_recent = list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
+        
+        # হিরো সেকশনের জন্য পোস্টারসহ সর্বোচ্চ ৫টি মুভি নিন
+        hero_movies = [movie for movie in all_recent if movie.get('poster')][:5]
+
         context = {
             "trending_movies": list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
-            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
-            "is_full_page_list": False, "query": ""
+            "recently_added": all_recent,
+            "hero_movies": hero_movies, # <<< হিরো সেকশনের জন্য নতুন তালিকা
+            "is_full_page_list": False, 
+            "query": ""
         }
     
     for key, value in context.items():
@@ -1038,44 +1042,8 @@ def movie_detail(movie_id):
         movie = dict(movie_obj)
         movie['_id'] = str(movie['_id'])
         
-        # Auto-fetch logic from TMDb if details are missing
-        needs_update = not all(k in movie and movie[k] for k in ["poster", "overview", "release_date", "genres"])
         tmdb_id = movie.get("tmdb_id")
         tmdb_type = "tv" if movie.get("type") == "series" else "movie"
-        
-        if needs_update and TMDB_API_KEY:
-            if not tmdb_id:
-                search_url = f"https://api.themoviedb.org/3/search/{tmdb_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
-                try:
-                    search_res = requests.get(search_url, timeout=5).json()
-                    if search_res.get("results"):
-                        tmdb_id = search_res["results"][0].get("id")
-                except requests.RequestException as e:
-                    print(f"TMDb search error for '{movie['title']}': {e}")
-
-            if tmdb_id:
-                detail_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
-                try:
-                    res = requests.get(detail_url, timeout=5).json()
-                    update_fields = {"tmdb_id": tmdb_id}
-                    
-                    if not movie.get("poster") and res.get("poster_path"): 
-                        update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
-                    if not movie.get("overview") and res.get("overview"): 
-                        update_fields["overview"] = movie["overview"] = res["overview"]
-                    if not movie.get("vote_average") and res.get("vote_average"): 
-                        update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
-                    if not movie.get("release_date"):
-                        release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
-                        if release_date: update_fields["release_date"] = movie["release_date"] = release_date
-                    if not movie.get("genres") and res.get("genres"):
-                         update_fields["genres"] = movie["genres"] = [g['name'] for g in res.get("genres", [])]
-
-                    if len(update_fields) > 1:
-                        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
-                        print(f"Updated '{movie['title']}' with data from TMDb.")
-                except requests.RequestException as e:
-                    print(f"TMDb detail fetch error for '{movie['title']}': {e}")
         
         # Fetch trailer key
         trailer_key = None
@@ -1112,7 +1080,6 @@ def watch_movie(movie_id):
                     break
         
         if watch_link:
-            # Check if the link is a direct video link (from our stream/download routes)
             is_direct = watch_link.startswith(url_for('stream_file', file_id='', _external=True).rsplit('/', 1)[0])
             return render_template_string(watch_html, watch_link=watch_link, title=title, is_direct_link=is_direct)
             
@@ -1128,8 +1095,7 @@ def admin():
         content_type = request.form.get("content_type", "movie")
         genres_raw = request.form.get("genres", "")
         movie_data = {
-            "title": request.form.get("title"),
-            "type": content_type,
+            "title": request.form.get("title"), "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "tmdb_id": None,
@@ -1191,8 +1157,7 @@ def edit_movie(movie_id):
         content_type = request.form.get("content_type", "movie")
         genres_raw = request.form.get("genres", "")
         update_data = {
-            "title": request.form.get("title"),
-            "type": content_type,
+            "title": request.form.get("title"), "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "poster": request.form.get("poster_url", "").strip(),
@@ -1243,15 +1208,15 @@ def render_full_list(content_list, title):
     for m in content_list: m['_id'] = str(m['_id'])
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
 
-@app.route('/trending')
+@app.route('/trending_movies')
 def trending_movies():
     return render_full_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Trending Now")
 
-@app.route('/movies')
+@app.route('/movies_only')
 def movies_only():
     return render_full_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Movies")
 
-@app.route('/series')
+@app.route('/webseries')
 def webseries():
     return render_full_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1)), "All Web Series")
 
@@ -1264,7 +1229,7 @@ def recently_added_all():
     return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
 
 # ====================================================================
-# <<< নতুন যোগ করা অংশ: টেলিগ্রাম থেকে ফাইল পরিবেশন করার জন্য >>>
+# <<< টেলিগ্রাম থেকে ফাইল পরিবেশন করার জন্য রুট >>>
 # ====================================================================
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
@@ -1275,7 +1240,6 @@ def stream_file(file_id):
         file_url = tg_file.file_path
         
         req = requests.get(file_url, stream=True)
-        # Streaming response
         return Response(req.iter_content(chunk_size=1024*1024), mimetype=req.headers['Content-Type'])
     except Exception as e:
         print(f"Streaming error for file_id {file_id}: {e}")
@@ -1286,7 +1250,6 @@ def download_file(file_id):
     try:
         tg_file = bot.get_file(file_id)
         
-        # বট থেকে ফাইলের আসল নাম পাওয়া
         file_info_url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}'
         file_info_res = requests.get(file_info_url).json()
         if not file_info_res.get('ok'):
@@ -1296,7 +1259,6 @@ def download_file(file_id):
 
         req = requests.get(tg_file.file_path, stream=True)
         
-        # Download response
         return Response(
             req.iter_content(chunk_size=1024*1024), 
             mimetype=req.headers['Content-Type'],
@@ -1305,10 +1267,6 @@ def download_file(file_id):
     except Exception as e:
         print(f"Download error for file_id {file_id}: {e}")
         return "Error: Could not process the download.", 404
-# ====================================================================
-# <<< নতুন অংশের সমাপ্তি >>>
-# ====================================================================
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
