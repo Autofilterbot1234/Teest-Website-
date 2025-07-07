@@ -234,6 +234,31 @@ index_html = """
   .nav-item.active .fa-home, .nav-item.active .fa-envelope, .nav-item.active .fa-layer-group { color: var(--netflix-red); }
   .ad-container { margin: 40px 50px; display: flex; justify-content: center; align-items: center; }
 
+  .telegram-join-section {
+    background-color: #181818; padding: 40px 20px;
+    margin-top: 50px; text-align: center;
+  }
+  .telegram-join-section .telegram-icon {
+    font-size: 4rem; color: #2AABEE; margin-bottom: 15px;
+  }
+  .telegram-join-section h2 {
+    font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem;
+    color: var(--text-light); margin-bottom: 10px;
+  }
+  .telegram-join-section p {
+    font-size: 1.1rem; color: var(--text-dark); max-width: 600px;
+    margin: 0 auto 25px auto;
+  }
+  .telegram-join-button {
+    display: inline-flex; align-items: center; gap: 10px;
+    background-color: #2AABEE; color: white;
+    padding: 12px 30px; border-radius: 50px;
+    font-size: 1.1rem; font-weight: 700;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .telegram-join-button:hover { transform: scale(1.05); background-color: #1e96d1; }
+  .telegram-join-button i { font-size: 1.3rem; }
+
   @media (max-width: 768px) {
       body { padding-bottom: var(--nav-height); }
       .main-nav { padding: 10px 15px; }
@@ -256,6 +281,8 @@ index_html = """
       .full-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
       .bottom-nav { display: flex; }
       .ad-container { margin: 25px 15px; }
+      .telegram-join-section h2 { font-size: 2rem; }
+      .telegram-join-section p { font-size: 1rem; }
   }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
@@ -331,6 +358,15 @@ index_html = """
     {{ render_carousel('Web Series', latest_series, 'webseries') }}
     {{ render_carousel('Recently Added', recently_added_full, 'recently_added_all') }}
     {{ render_carousel('Coming Soon', coming_soon_movies, 'coming_soon') }}
+    
+    <div class="telegram-join-section">
+        <i class="fa-brands fa-telegram telegram-icon"></i>
+        <h2>Join Our Telegram Channel</h2>
+        <p>Get the latest movie updates, news, and direct download links right on your phone!</p>
+        <a href="https://t.me/+60goZWp-FpkxNzVl" target="_blank" class="telegram-join-button">
+            <i class="fa-brands fa-telegram"></i> Join Main Channel
+        </a>
+    </div>
   {% endif %}
 </main>
 
@@ -1027,7 +1063,6 @@ def render_full_list(content_list, title):
 def movies_by_badge(badge_name):
     return render_full_list(list(movies.find({"poster_badge": badge_name}).sort('_id', -1)), f'Tag: {badge_name}')
 
-# --- Genre Page Routes ---
 @app.route('/genres')
 def genres_page():
     all_genres = movies.distinct("genres")
@@ -1037,7 +1072,6 @@ def genres_page():
 @app.route('/genre/<genre_name>')
 def movies_by_genre(genre_name):
     return render_full_list(list(movies.find({"genres": genre_name}).sort('_id', -1)), f'Genre: {genre_name}')
-# --- End of Genre Page Routes ---
 
 @app.route('/trending_movies')
 def trending_movies():
