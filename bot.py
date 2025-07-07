@@ -231,7 +231,7 @@ index_html = """
   }
   .nav-item i { font-size: 20px; margin-bottom: 4px; }
   .nav-item.active { color: var(--text-light); }
-  .nav-item.active .fa-home, .nav-item.active .fa-envelope { color: var(--netflix-red); }
+  .nav-item.active .fa-home, .nav-item.active .fa-envelope, .nav-item.active .fa-layer-group { color: var(--netflix-red); }
   .ad-container { margin: 40px 50px; display: flex; justify-content: center; align-items: center; }
 
   @media (max-width: 768px) {
@@ -258,7 +258,7 @@ index_html = """
       .ad-container { margin: 25px 15px; }
   }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
 <header class="main-nav">
@@ -336,10 +336,10 @@ index_html = """
 
 <nav class="bottom-nav">
   <a href="{{ url_for('home') }}" class="nav-item {% if request.endpoint == 'home' %}active{% endif %}"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="{{ url_for('genres_page') }}" class="nav-item {% if request.endpoint == 'genres_page' %}active{% endif %}"><i class="fas fa-layer-group"></i><span>Genres</span></a>
   <a href="{{ url_for('movies_only') }}" class="nav-item {% if request.endpoint == 'movies_only' %}active{% endif %}"><i class="fas fa-film"></i><span>Movies</span></a>
   <a href="{{ url_for('webseries') }}" class="nav-item {% if request.endpoint == 'webseries' %}active{% endif %}"><i class="fas fa-tv"></i><span>Series</span></a>
   <a href="{{ url_for('contact') }}" class="nav-item {% if request.endpoint == 'contact' %}active{% endif %}"><i class="fas fa-envelope"></i><span>Request</span></a>
-  <a href="{{ url_for('coming_soon') }}" class="nav-item {% if request.endpoint == 'coming_soon' %}active{% endif %}"><i class="fas fa-clock"></i><span>Coming Soon</span></a>
 </nav>
 
 <script>
@@ -367,6 +367,75 @@ index_html = """
 </html>
 """
 # --- END OF index_html TEMPLATE ---
+
+
+# --- START OF genres_html TEMPLATE ---
+genres_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>{{ title }} - MovieZone</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+  :root { --netflix-red: #E50914; --netflix-black: #141414; --text-light: #f5f5f5; --text-dark: #a0a0a0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Roboto', sans-serif; background-color: var(--netflix-black); color: var(--text-light); }
+  a { text-decoration: none; color: inherit; }
+  
+  .main-container { padding: 100px 50px 50px; }
+  .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--netflix-red); margin-bottom: 30px; }
+  .back-button { color: var(--text-light); font-size: 1rem; margin-bottom: 20px; display: inline-block; }
+  .back-button:hover { color: var(--netflix-red); }
+  
+  .genre-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+  }
+  .genre-card {
+    background: linear-gradient(45deg, #2c2c2c, #1a1a1a);
+    border-radius: 8px;
+    padding: 30px 20px;
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    transition: transform 0.3s ease, background 0.3s ease;
+    border: 1px solid #444;
+  }
+  .genre-card:hover {
+    transform: translateY(-5px) scale(1.03);
+    background: linear-gradient(45deg, var(--netflix-red), #b00710);
+    border-color: var(--netflix-red);
+  }
+  @media (max-width: 768px) {
+    .main-container { padding: 80px 15px 30px; }
+    .page-title { font-size: 2.2rem; }
+    .genre-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
+    .genre-card { font-size: 1.1rem; padding: 25px 15px; }
+  }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+</head>
+<body>
+  <div class="main-container">
+    <a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a>
+    <h1 class="page-title">{{ title }}</h1>
+    <div class="genre-grid">
+      {% for genre in genres %}
+        <a href="{{ url_for('movies_by_genre', genre_name=genre) }}" class="genre-card">
+          <span>{{ genre }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
+  {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
+</body>
+</html>
+"""
+# --- END OF genres_html TEMPLATE ---
 
 
 # --- START OF detail_html TEMPLATE ---
@@ -440,7 +509,7 @@ detail_html = """
     .carousel-arrow { display: none; }
   }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
 {% macro render_movie_card(m) %}
@@ -957,6 +1026,18 @@ def render_full_list(content_list, title):
 @app.route('/badge/<badge_name>')
 def movies_by_badge(badge_name):
     return render_full_list(list(movies.find({"poster_badge": badge_name}).sort('_id', -1)), f'Tag: {badge_name}')
+
+# --- Genre Page Routes ---
+@app.route('/genres')
+def genres_page():
+    all_genres = movies.distinct("genres")
+    all_genres = sorted([g for g in all_genres if g])
+    return render_template_string(genres_html, genres=all_genres, title="Browse by Genre")
+
+@app.route('/genre/<genre_name>')
+def movies_by_genre(genre_name):
+    return render_full_list(list(movies.find({"genres": genre_name}).sort('_id', -1)), f'Genre: {genre_name}')
+# --- End of Genre Page Routes ---
 
 @app.route('/trending_movies')
 def trending_movies():
