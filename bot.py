@@ -109,20 +109,19 @@ index_html = """
   .search-input:focus { background-color: rgba(0,0,0,0.9); border-color: var(--text-light); outline: none; }
 
   .tags-section {
-    padding: 80px 50px 10px 50px; /* Navbar এর নিচে জায়গা রাখার জন্য */
+    padding: 80px 50px 20px 50px;
     background-color: var(--netflix-black);
   }
   .tags-container {
-    display: flex; gap: 12px; overflow-x: auto;
-    scrollbar-width: none; -ms-overflow-style: none;
-    padding-bottom: 10px;
+    display: flex; flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
   }
-  .tags-container::-webkit-scrollbar { display: none; }
   .tag-link {
-    flex-shrink: 0; padding: 8px 20px;
+    padding: 6px 16px;
     background-color: rgba(255, 255, 255, 0.1);
     border: 1px solid #444; border-radius: 50px;
-    font-weight: 500; font-size: 0.9rem;
+    font-weight: 500; font-size: 0.85rem;
     transition: background-color 0.3s, border-color 0.3s, color 0.3s;
   }
   .tag-link:hover { background-color: var(--netflix-red); border-color: var(--netflix-red); color: white; }
@@ -240,7 +239,7 @@ index_html = """
       .main-nav { padding: 10px 15px; }
       .logo { font-size: 24px; }
       .search-input { width: 150px; }
-      .tags-section { padding: 80px 15px 10px 15px; }
+      .tags-section { padding: 80px 15px 15px 15px; }
       .tag-link { padding: 6px 15px; font-size: 0.8rem; }
       .hero-section { height: 60vh; }
       .hero-slide { padding: 15px; align-items: center; }
