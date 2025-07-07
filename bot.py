@@ -4,6 +4,7 @@ from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
+from datetime import datetime # datetime ইম্পোর্ট করুন
 
 # .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
@@ -47,12 +48,13 @@ try:
     db = client["movie_db"]
     movies = db["movies"]
     settings = db["settings"]
-    # === টিভি চ্যানেলের জন্য নতুন কালেকশন ===
-    tv_channels = db["tv_channels"]
+    # === ফিডব্যাকের জন্য নতুন কালেকশন ===
+    feedback = db["feedback"]
     print("Successfully connected to MongoDB!")
 except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
+
 
 # === Context Processor: সমস্ত টেমপ্লেটে বিজ্ঞাপনের কোড সহজলভ্য করার জন্য ===
 @app.context_processor
@@ -60,75 +62,7 @@ def inject_ads():
     ad_codes = settings.find_one()
     return dict(ad_settings=(ad_codes or {}))
 
-# ##########################################################################
-# ############ নতুন কোড শুরু: স্বয়ংক্রিয়ভাবে চ্যানেল যোগ করা ##############
-# ##########################################################################
-
-# কিছু জনপ্রিয় চ্যানেলের তালিকা (এগুলো পরিবর্তনশীল)
-PRE_POPULATED_CHANNELS = [
-    {
-        "name": "Somoy TV",
-        "logo_url": "https://i.ibb.co/FnnKwg2/somoy-tv.png",
-        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/somoyt00p/somoyt00p.stream/somoyt00p.m3u8",
-        "category": "Bangladeshi News"
-    },
-    {
-        "name": "Channel 24",
-        "logo_url": "https://i.ibb.co/qWFp9P6/channel-24.png",
-        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/ch24/ch24.stream/ch24.m3u8",
-        "category": "Bangladeshi News"
-    },
-    {
-        "name": "Jamuna TV",
-        "logo_url": "https://i.ibb.co/QkY1b7b/jamuna-tv.png",
-        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/jamunatv/jamunatv.stream/jamunatv.m3u8",
-        "category": "Bangladeshi News"
-    },
-    {
-        "name": "T-Sports",
-        "logo_url": "https://i.ibb.co/Dtdm4d2/t-sports.png",
-        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/tsports/tsports.stream/tsports.m3u8",
-        "category": "Sports"
-    },
-    {
-        "name": "Sony AATH",
-        "logo_url": "https://i.ibb.co/gDFsC22/sony-aath.png",
-        "stream_url": "https://prod-ent-live-gm.sonyliv.com/live/45a6f9f3-d083-494b-9169-d6554b5f1338/master.m3u8",
-        "category": "Indian Entertainment"
-    },
-    {
-        "name": "Zee Bangla",
-        "logo_url": "https://i.ibb.co/hZFXm2X/zee-bangla.png",
-        "stream_url": "http://103.143.15.14/Content/zee-bangla/Live/channel(ZeeBangla)/index.m3u8",
-        "category": "Indian Entertainment"
-    },
-    {
-        "name": "9X Jalwa",
-        "logo_url": "https://i.ibb.co/JqjTqY4/9x-jalwa.png",
-        "stream_url": "https://d2q8p4pe5spbak.cloudfront.net/bpk-tv/9XJALWA/9XJALWA.isml/index.m3u8",
-        "category": "Music"
-    }
-]
-
-def seed_tv_channels():
-    """ডাটাবেসে চ্যানেল না থাকলে স্বয়ংক্রিয়ভাবে যোগ করে"""
-    if tv_channels.count_documents({}) == 0:
-        print("No TV channels found. Seeding the database with pre-populated channels...")
-        try:
-            tv_channels.insert_many(PRE_POPULATED_CHANNELS, ordered=False)
-            print(f"Successfully inserted {len(PRE_POPULATED_CHANNELS)} channels.")
-        except Exception as e:
-            print(f"Error seeding channels: {e}")
-
-# অ্যাপ চালু হওয়ার সময় ফাংশনটি কল করা হচ্ছে
-seed_tv_channels()
-
-# ##########################################################################
-# ############ নতুন কোড শেষ: স্বয়ংক্রিয়ভাবে চ্যানেল যোগ করা ##############
-# ##########################################################################
-
-
-# --- START OF index_html TEMPLATE (নেভিগেশন বারে Live TV যোগ করা হয়েছে) ---
+# --- START OF index_html TEMPLATE (নেভিগেশন বারে পরিবর্তন) ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -158,7 +92,7 @@ index_html = """
   .main-nav {
       position: fixed; top: 0; left: 0; width: 100%; padding: 15px 50px;
       display: flex; justify-content: space-between; align-items: center; z-index: 100;
-      transition: background-color: 0.3s ease;
+      transition: background-color 0.3s ease;
       background: linear-gradient(to bottom, rgba(0,0,0,0.7) 10%, rgba(0,0,0,0));
   }
   .main-nav.scrolled { background-color: var(--netflix-black); }
@@ -316,11 +250,10 @@ index_html = """
       display: flex; flex-direction: column; align-items: center;
       color: var(--text-dark); font-size: 10px; flex-grow: 1;
       padding: 5px 0; transition: color 0.2s ease;
-      text-decoration: none;
   }
   .nav-item i { font-size: 20px; margin-bottom: 4px; }
   .nav-item.active { color: var(--text-light); }
-  .nav-item.active .fa-home, .nav-item.active .fa-satellite-dish { color: var(--netflix-red); } /* Updated for TV */
+  .nav-item.active .fa-home, .nav-item.active .fa-envelope { color: var(--netflix-red); }
   
   /* === বিজ্ঞাপনের কন্টেইনার স্টাইল === */
   .ad-container {
@@ -459,12 +392,14 @@ index_html = """
   <a href="{{ url_for('movies_only') }}" class="nav-item {% if request.endpoint == 'movies_only' %}active{% endif %}">
       <i class="fas fa-film"></i><span>Movies</span>
   </a>
-  <!-- === নতুন লাইভ টিভি বাটন === -->
-  <a href="{{ url_for('live_tv') }}" class="nav-item {% if request.endpoint in ['live_tv', 'watch_tv'] %}active{% endif %}">
-      <i class="fas fa-satellite-dish"></i><span>Live TV</span>
-  </a>
   <a href="{{ url_for('webseries') }}" class="nav-item {% if request.endpoint == 'webseries' %}active{% endif %}">
       <i class="fas fa-tv"></i><span>Series</span>
+  </a>
+  <a href="{{ url_for('contact') }}" class="nav-item {% if request.endpoint == 'contact' %}active{% endif %}">
+      <i class="fas fa-envelope"></i><span>Request</span>
+  </a>
+  <a href="{{ url_for('coming_soon') }}" class="nav-item {% if request.endpoint == 'coming_soon' %}active{% endif %}">
+      <i class="fas fa-clock"></i><span>Coming Soon</span>
   </a>
 </nav>
 
@@ -515,7 +450,7 @@ index_html = """
 # --- END OF index_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (Unchanged) ---
+# --- START OF detail_html TEMPLATE (রিপোর্ট বাটন যুক্ত করা হয়েছে) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -689,6 +624,12 @@ detail_html = """
       </div>
       {% endif %}
 
+      <div style="margin: 20px 0;">
+        <a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="download-button" style="background-color:#5a5a5a; text-align:center;">
+            <i class="fas fa-flag"></i> Report a Problem
+        </a>
+      </div>
+
       <div class="download-section">
         {% if movie.is_coming_soon %}<h3 class="section-title">Coming Soon</h3>
         {% elif movie.type == 'movie' and movie.links %}
@@ -749,7 +690,7 @@ function copyToClipboard(text) {
 # --- END OF detail_html TEMPLATE ---
 
 
-# --- START OF watch_html TEMPLATE (Unchanged) ---
+# --- START OF watch_html TEMPLATE ---
 watch_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -788,7 +729,7 @@ watch_html = """
 # --- END OF watch_html TEMPLATE ---
 
 
-# --- START OF admin_html TEMPLATE (TV চ্যানেল ম্যানেজমেন্ট যোগ করা হয়েছে) ---
+# --- START OF admin_html TEMPLATE (ফিডব্যাক সেকশন যুক্ত করা হয়েছে) ---
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -807,7 +748,7 @@ admin_html = """
     form { max-width: 800px; margin: 0 auto 40px auto; background: var(--dark-gray); padding: 25px; border-radius: 8px;}
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 8px; font-weight: bold; }
-    input[type="text"], input[type="url"], textarea, select, input[type="number"], input[type="search"] {
+    input[type="text"], input[type="url"], textarea, select, input[type="number"], input[type="search"], input[type="email"] {
       width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray);
       font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box;
     }
@@ -820,17 +761,17 @@ admin_html = """
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
     table { display: block; overflow-x: auto; white-space: nowrap; width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); vertical-align: middle; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
     th { background: #252525; }
     td { background: var(--dark-gray); }
     .action-buttons { display: flex; gap: 10px; }
-    .action-buttons a, .action-buttons button {
+    .action-buttons a, .action-buttons button, .delete-btn {
         padding: 6px 12px; border-radius: 4px; text-decoration: none;
         color: white; border: none; cursor: pointer; transition: opacity 0.3s ease;
     }
     .edit-btn { background: #007bff; }
     .delete-btn { background: #dc3545; }
-    .action-buttons a:hover, .action-buttons button:hover { opacity: 0.8; }
+    .action-buttons a:hover, .action-buttons button:hover, .delete-btn:hover { opacity: 0.8; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
     hr.section-divider { border: 0; height: 2px; background-color: var(--light-gray); margin: 40px 0; }
   </style>
@@ -862,57 +803,6 @@ admin_html = """
     </div>
     <button type="submit">Save Ad Codes</button>
   </form>
-
-  <hr class="section-divider">
-
-  <!-- ================= START: টিভি চ্যানেল ম্যানেজমেন্ট ================= -->
-  <h2>লাইভ টিভি চ্যানেল ম্যানেজমেন্ট</h2>
-  <form method="post" action="{{ url_for('add_channel') }}">
-    <h3>নতুন চ্যানেল যোগ করুন</h3>
-    <div class="form-group">
-      <label for="channel_name">চ্যানেলের নাম:</label>
-      <input type="text" id="channel_name" name="name" required>
-    </div>
-    <div class="form-group">
-      <label for="logo_url">লোগো URL:</label>
-      <input type="url" id="logo_url" name="logo_url" required>
-    </div>
-    <div class="form-group">
-      <label for="stream_url">স্ট্রিম URL (.m3u8):</label>
-      <input type="url" id="stream_url" name="stream_url" required>
-    </div>
-    <div class="form-group">
-      <label for="category">ক্যাটাগরি (e.g., News, Sports, Entertainment):</label>
-      <input type="text" id="category" name="category" required>
-    </div>
-    <button type="submit">চ্যানেল যোগ করুন</button>
-  </form>
-
-  <h3>বিদ্যমান চ্যানেল তালিকা</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>লোগো</th>
-        <th>নাম</th>
-        <th>ক্যাটাগরি</th>
-        <th>একশন</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for channel in tv_channels_list %}
-      <tr>
-        <td><img src="{{ channel.logo_url }}" alt="logo" style="width: 50px; height: auto; background: white; padding: 2px; border-radius: 4px;"></td>
-        <td>{{ channel.name }}</td>
-        <td>{{ channel.category }}</td>
-        <td class="action-buttons">
-          <button class="delete-btn" onclick="confirmChannelDelete('{{ channel._id }}', '{{ channel.name }}')">ডিলিট</button>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% if not tv_channels_list %}<p>এখনো কোনো চ্যানেল যোগ করা হয়নি।</p>{% endif %}
-  <!-- ================= END: টিভি চ্যানেল ম্যানেজমেন্ট ================= -->
 
   <hr class="section-divider">
 
@@ -948,6 +838,8 @@ admin_html = """
     <button type="submit">Add Content</button>
   </form>
 
+  <hr class="section-divider">
+
   <h2>Manage Content</h2>
   <table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead>
   <tbody>
@@ -962,12 +854,43 @@ admin_html = """
     {% endfor %}
   </tbody></table>
   {% if not all_content %}<p>No content found.</p>{% endif %}
+  
+  <hr class="section-divider">
+
+    <h2>User Feedback / Reports</h2>
+    {% if feedback_list %}
+    <table>
+        <thead>
+        <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Message</th>
+            <th>Email</th>
+            <th>Action</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in feedback_list %}
+        <tr>
+            <td style="min-width: 150px;">{{ item.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.content_title }}</td>
+            <td style="white-space: pre-wrap; min-width: 300px;">{{ item.message }}</td>
+            <td>{{ item.email or 'N/A' }}</td>
+            <td>
+            <a href="{{ url_for('delete_feedback', feedback_id=item._id) }}" class="delete-btn" onclick="return confirm('Are you sure you want to delete this feedback?');">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No new feedback or reports.</p>
+    {% endif %}
 
   <script>
     function confirmDelete(id, title) { if (confirm('Delete "' + title + '"?')) window.location.href = '/delete_movie/' + id; }
-    // নতুন ডিলিট ফাংশন
-    function confirmChannelDelete(id, name) { if (confirm('Delete TV Channel "' + name + '"?')) window.location.href = '/admin/delete_channel/' + id; }
-    
     function toggleEpisodeFields() {
         var isSeries = document.getElementById('content_type').value === 'series';
         document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none';
@@ -995,7 +918,7 @@ admin_html = """
 # --- END OF admin_html TEMPLATE ---
 
 
-# --- START OF edit_html TEMPLATE (Unchanged) ---
+# --- START OF edit_html TEMPLATE ---
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -1108,178 +1031,94 @@ edit_html = """
 """
 # --- END OF edit_html TEMPLATE ---
 
-
-# ##########################################################################
-# ############ নতুন কোড শুরু: টিভি চ্যানেলের জন্য নতুন টেমপ্লেট ###########
-# ##########################################################################
-
-# --- START OF live_tv_html TEMPLATE ---
-live_tv_html = """
+# --- START OF contact_html TEMPLATE ---
+contact_html = """
 <!DOCTYPE html>
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Live TV - MovieZone</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us / Report - MovieZone</title>
     <style>
         :root {
             --netflix-red: #E50914; --netflix-black: #141414;
-            --text-light: #f5f5f5; --text-dark: #a0a0a0;
-            --nav-height: 60px;
+            --dark-gray: #222; --light-gray: #333; --text-light: #f5f5f5;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Roboto', sans-serif; background-color: var(--netflix-black);
-            color: var(--text-light); padding: 20px; padding-bottom: 80px;
+            font-family: 'Roboto', sans-serif; background: var(--netflix-black);
+            color: var(--text-light); padding: 20px;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
         }
-        .main-header {
-             margin-bottom: 20px;
+        .contact-container {
+            max-width: 600px; width: 100%;
+            background: var(--dark-gray); padding: 30px; border-radius: 8px;
         }
-        .main-header h1 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 2.5rem; color: var(--netflix-red);
-            text-align: center;
+        h2 { font-family: 'Bebas Neue', sans-serif; color: var(--netflix-red); font-size: 2.5rem; text-align: center; margin-bottom: 25px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input, select, textarea {
+            width: 100%; padding: 12px; border-radius: 4px; border: 1px solid var(--light-gray);
+            font-size: 1rem; background: var(--light-gray); color: var(--text-light); box-sizing: border-box;
         }
-        .channel-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 20px;
+        textarea { resize: vertical; min-height: 120px; }
+        button[type="submit"] {
+            background: var(--netflix-red); color: white; font-weight: 700; cursor: pointer;
+            border: none; padding: 12px 25px; border-radius: 4px; font-size: 1.1rem;
+            width: 100%; transition: background 0.3s ease;
         }
-        .channel-card {
-            display: block;
-            text-decoration: none;
-            background-color: #222;
-            border-radius: 8px;
-            overflow: hidden;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            text-align: center;
+        button[type="submit"]:hover { background: #b00710; }
+        .success-message {
+            text-align: center; padding: 20px; background-color: #1f4e2c;
+            color: #d4edda; border-radius: 5px; margin-bottom: 20px;
         }
-        .channel-card:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-        }
-        .channel-logo {
-            width: 100%;
-            height: 120px;
-            object-fit: contain;
-            background-color: #333;
-            padding: 10px;
-        }
-        .channel-name {
-            padding: 10px;
-            font-size: 0.9rem;
-            color: var(--text-light);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .bottom-nav {
-            display: flex; position: fixed; bottom: 0; left: 0; right: 0;
-            height: var(--nav-height); background-color: #181818;
-            border-top: 1px solid #282828; justify-content: space-around;
-            align-items: center; z-index: 200;
-        }
-        .nav-item {
-            display: flex; flex-direction: column; align-items: center;
-            color: var(--text-dark); font-size: 10px; flex-grow: 1;
-            padding: 5px 0; transition: color 0.2s ease; text-decoration: none;
-        }
-        .nav-item i { font-size: 20px; margin-bottom: 4px; }
-        .nav-item.active { color: var(--text-light); }
-        .nav-item.active .fa-satellite-dish { color: var(--netflix-red); }
-        @media (max-width: 768px) {
-            .channel-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px; }
-            .channel-logo { height: 100px; }
+        .back-link {
+            display: block; text-align: center; margin-top: 20px;
+            color: var(--netflix-red); text-decoration: none; font-weight: bold;
         }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header class="main-header">
-        <h1>Live TV Channels</h1>
-    </header>
-
-    <div class="channel-grid">
-        {% for channel in channels %}
-        <a href="{{ url_for('watch_tv', channel_id=channel._id) }}" class="channel-card">
-            <img src="{{ channel.logo_url or 'https://via.placeholder.com/150x150.png?text=No+Logo' }}" alt="{{ channel.name }}" class="channel-logo">
-            <div class="channel-name">{{ channel.name }}</div>
-        </a>
-        {% endfor %}
-        {% if not channels %}
-            <p style="text-align:center; grid-column: 1 / -1;">No TV channels added yet. Please add from admin panel.</p>
+    <div class="contact-container">
+        <h2>Contact Us</h2>
+        {% if message_sent %}
+            <div class="success-message">
+                <p>আপনার বার্তা সফলভাবে পাঠানো হয়েছে। ধন্যবাদ!</p>
+                <p>Your message has been sent successfully. Thank you!</p>
+            </div>
+            <a href="{{ url_for('home') }}" class="back-link">← Back to Home</a>
+        {% else %}
+            <form method="post">
+                <div class="form-group">
+                    <label for="type">বিষয় (Subject):</label>
+                    <select name="type" id="type">
+                        <option value="Movie Request" {% if prefill_type == 'Problem Report' %}disabled{% endif %}>Movie/Series Request</option>
+                        <option value="Problem Report" {% if prefill_type == 'Problem Report' %}selected{% endif %}>Report a Problem (Broken Link etc.)</option>
+                        <option value="General Feedback">General Feedback</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="content_title">মুভি/সিরিজের নাম (Movie/Series Title):</label>
+                    <input type="text" name="content_title" id="content_title" value="{{ prefill_title }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="message">আপনার বার্তা (Your Message):</label>
+                    <textarea name="message" id="message" required></textarea>
+                </div>
+                 <div class="form-group">
+                    <label for="email">আপনার ইমেইল (Your Email - Optional):</label>
+                    <input type="email" name="email" id="email">
+                </div>
+                <input type="hidden" name="reported_content_id" value="{{ prefill_id }}">
+                <button type="submit">Submit Message</button>
+            </form>
+             <a href="{{ url_for('home') }}" class="back-link">← Cancel and Go Home</a>
         {% endif %}
     </div>
-
-    <!-- Bottom Navigation Bar -->
-    <nav class="bottom-nav">
-      <a href="{{ url_for('home') }}" class="nav-item">
-          <i class="fas fa-home"></i><span>Home</span>
-      </a>
-      <a href="{{ url_for('movies_only') }}" class="nav-item">
-          <i class="fas fa-film"></i><span>Movies</span>
-      </a>
-      <a href="{{ url_for('live_tv') }}" class="nav-item active">
-          <i class="fas fa-satellite-dish"></i><span>Live TV</span>
-      </a>
-      <a href="{{ url_for('webseries') }}" class="nav-item">
-          <i class="fas fa-tv"></i><span>Series</span>
-      </a>
-    </nav>
-    
-    <!-- বিজ্ঞাপনের কোড -->
-    {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-    {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
 </body>
 </html>
 """
-# --- END OF live_tv_html TEMPLATE ---
-
-
-# --- START OF watch_tv_html TEMPLATE ---
-watch_tv_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watching: {{ channel.name }}</title>
-    <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
-    <style>
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
-        .player-container { width: 100%; height: 100%; }
-        .video-js { width: 100%; height: 100%; }
-    </style>
-</head>
-<body>
-    <div class="player-container">
-        <video id="live-player" class="video-js vjs-default-skin vjs-big-play-centered" controls autoplay preload="auto">
-            <source src="{{ channel.stream_url }}" type="application/x-mpegURL">
-            <p class="vjs-no-js">
-                To view this video please enable JavaScript, and consider upgrading to a web browser that
-                <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
-            </p>
-        </video>
-    </div>
-
-    <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
-    <script>
-        var player = videojs('live-player', {
-            // Player options
-        });
-    </script>
-    
-    {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-    {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
-</body>
-</html>
-"""
-# --- END OF watch_tv_html TEMPLATE ---
-
-# ##########################################################################
-# ###################### নতুন কোড শেষ ######################################
-# ##########################################################################
-
+# --- END OF contact_html TEMPLATE ---
 
 
 # ----------------- Flask Routes (আপডেট করা হয়েছে) -----------------
@@ -1299,7 +1138,7 @@ def home():
             "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
-            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(6)), # Hero slider-এর জন্য ৬টি যথেষ্ট
             "is_full_page_list": False, "query": ""
         }
     
@@ -1401,61 +1240,91 @@ def watch_movie(movie_id):
         print(f"Watch page error: {e}")
         return "An error occurred.", 500
 
+# === নতুন রুট: Contact/Report পেজের জন্য ===
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    if request.method == 'POST':
+        feedback_data = {
+            "type": request.form.get("type"),
+            "content_title": request.form.get("content_title"),
+            "message": request.form.get("message"),
+            "email": request.form.get("email", "").strip(),
+            "reported_content_id": request.form.get("reported_content_id", None),
+            "timestamp": datetime.utcnow(),
+            "status": "New"
+        }
+        feedback.insert_one(feedback_data)
+        return render_template_string(contact_html, message_sent=True)
+
+    # GET request-এর জন্য
+    prefill_title = request.args.get('title', '')
+    prefill_id = request.args.get('report_id', '')
+    prefill_type = 'Problem Report' if prefill_id else 'Movie Request'
+    
+    return render_template_string(contact_html, 
+                                  message_sent=False, 
+                                  prefill_title=prefill_title, 
+                                  prefill_id=prefill_id,
+                                  prefill_type=prefill_type)
+
+
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
     if request.method == "POST":
-        content_type = request.form.get("content_type", "movie")
-        genres_raw = request.form.get("genres", "")
-        movie_data = {
-            "title": request.form.get("title"),
-            "type": content_type,
-            "is_trending": request.form.get("is_trending") == "true",
-            "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "tmdb_id": None,
-            "poster": request.form.get("poster_url", "").strip(),
-            "overview": request.form.get("overview", "").strip(),
-            "release_date": request.form.get("release_date", "").strip(),
-            "genres": [g.strip() for g in genres_raw.split(',') if g.strip()],
-            "poster_badge": request.form.get("poster_badge", "").strip()
-        }
+        # এই লজিকটি শুধুমাত্র 'Add New Content' ফর্মের জন্য
+        if 'title' in request.form:
+            content_type = request.form.get("content_type", "movie")
+            genres_raw = request.form.get("genres", "")
+            movie_data = {
+                "title": request.form.get("title"),
+                "type": content_type,
+                "is_trending": request.form.get("is_trending") == "true",
+                "is_coming_soon": request.form.get("is_coming_soon") == "true",
+                "tmdb_id": None,
+                "poster": request.form.get("poster_url", "").strip(),
+                "overview": request.form.get("overview", "").strip(),
+                "release_date": request.form.get("release_date", "").strip(),
+                "genres": [g.strip() for g in genres_raw.split(',') if g.strip()],
+                "poster_badge": request.form.get("poster_badge", "").strip()
+            }
 
-        if content_type == "movie":
-            movie_data["watch_link"] = request.form.get("watch_link", "")
-            links = []
-            if request.form.get("link_480p"): links.append({"quality": "480p", "url": request.form.get("link_480p")})
-            if request.form.get("link_720p"): links.append({"quality": "720p", "url": request.form.get("link_720p")})
-            if request.form.get("link_1080p"): links.append({"quality": "1080p", "url": request.form.get("link_1080p")})
-            movie_data["links"] = links
-        else: # series
-            episodes = []
-            ep_numbers = request.form.getlist('episode_number[]')
-            for i in range(len(ep_numbers)):
-                ep_links = []
-                if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "url": request.form.getlist('episode_link_480p[]')[i]})
-                if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "url": request.form.getlist('episode_link_720p[]')[i]})
-                episodes.append({
-                    "episode_number": int(ep_numbers[i]),
-                    "title": request.form.getlist('episode_title[]')[i],
-                    "watch_link": request.form.getlist('episode_watch_link[]')[i],
-                    "links": ep_links
-                })
-            movie_data["episodes"] = episodes
-        
-        movies.insert_one(movie_data)
+            if content_type == "movie":
+                movie_data["watch_link"] = request.form.get("watch_link", "")
+                links = []
+                if request.form.get("link_480p"): links.append({"quality": "480p", "url": request.form.get("link_480p")})
+                if request.form.get("link_720p"): links.append({"quality": "720p", "url": request.form.get("link_720p")})
+                if request.form.get("link_1080p"): links.append({"quality": "1080p", "url": request.form.get("link_1080p")})
+                movie_data["links"] = links
+            else: # series
+                episodes = []
+                ep_numbers = request.form.getlist('episode_number[]')
+                for i in range(len(ep_numbers)):
+                    ep_links = []
+                    if request.form.getlist('episode_link_480p[]')[i]: ep_links.append({"quality": "480p", "url": request.form.getlist('episode_link_480p[]')[i]})
+                    if request.form.getlist('episode_link_720p[]')[i]: ep_links.append({"quality": "720p", "url": request.form.getlist('episode_link_720p[]')[i]})
+                    episodes.append({
+                        "episode_number": int(ep_numbers[i]),
+                        "title": request.form.getlist('episode_title[]')[i],
+                        "watch_link": request.form.getlist('episode_watch_link[]')[i],
+                        "links": ep_links
+                    })
+                movie_data["episodes"] = episodes
+            
+            movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
-    # GET request এর জন্য ডেটা প্রস্তুত করা
+    # GET রিকোয়েস্টের জন্য
     all_content = list(movies.find().sort('_id', -1))
     for m in all_content: m['_id'] = str(m['_id'])
+    
+    # === নতুন: ফিডব্যাক লিস্ট আনা ===
+    feedback_list = list(feedback.find().sort('timestamp', -1))
+    for f in feedback_list: f['_id'] = str(f['_id'])
 
-    # টিভি চ্যানেলের তালিকা লোড করুন
-    channels_list = list(tv_channels.find().sort('name', 1))
-    for c in channels_list: c['_id'] = str(c['_id'])
+    return render_template_string(admin_html, all_content=all_content, feedback_list=feedback_list)
 
-    # টেমপ্লেটে উভয় তালিকা পাস করুন
-    return render_template_string(admin_html, all_content=all_content, tv_channels_list=channels_list)
-
+# === নতুন রুট: বিজ্ঞাপন কোড সেভ করার জন্য ===
 @app.route('/admin/save_ads', methods=['POST'])
 @requires_auth
 def save_ads():
@@ -1526,6 +1395,17 @@ def delete_movie(movie_id):
         print(f"Error deleting movie: {e}")
     return redirect(url_for('admin'))
 
+# === নতুন রুট: ফিডব্যাক ডিলিট করার জন্য ===
+@app.route('/feedback/delete/<feedback_id>')
+@requires_auth
+def delete_feedback(feedback_id):
+    try:
+        feedback.delete_one({"_id": ObjectId(feedback_id)})
+    except Exception as e:
+        print(f"Error deleting feedback: {e}")
+    return redirect(url_for('admin'))
+
+
 def render_full_list(content_list, title):
     for m in content_list: m['_id'] = str(m['_id'])
     return render_template_string(index_html, movies=content_list, query=title, is_full_page_list=True)
@@ -1549,56 +1429,6 @@ def coming_soon():
 @app.route('/recently_added')
 def recently_added_all():
     return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
-
-
-# ##########################################################################
-# #################### নতুন টিভি চ্যানেল রুটসমূহ ############################
-# ##########################################################################
-
-@app.route('/admin/add_channel', methods=['POST'])
-@requires_auth
-def add_channel():
-    channel_data = {
-        "name": request.form.get("name"),
-        "logo_url": request.form.get("logo_url"),
-        "stream_url": request.form.get("stream_url"),
-        "category": request.form.get("category"),
-    }
-    tv_channels.insert_one(channel_data)
-    return redirect(url_for('admin'))
-
-@app.route('/admin/delete_channel/<channel_id>')
-@requires_auth
-def delete_channel(channel_id):
-    try:
-        tv_channels.delete_one({"_id": ObjectId(channel_id)})
-    except Exception as e:
-        print(f"Error deleting channel: {e}")
-    return redirect(url_for('admin'))
-
-@app.route('/live-tv')
-def live_tv():
-    all_channels = list(tv_channels.find().sort('name', 1))
-    for channel in all_channels:
-        channel['_id'] = str(channel['_id'])
-    return render_template_string(live_tv_html, channels=all_channels)
-
-@app.route('/watch-tv/<channel_id>')
-def watch_tv(channel_id):
-    try:
-        channel = tv_channels.find_one({"_id": ObjectId(channel_id)})
-        if not channel or not channel.get("stream_url"):
-            return "Channel stream not found.", 404
-        
-        return render_template_string(watch_tv_html, channel=channel)
-    except Exception as e:
-        print(f"Watch TV error: {e}")
-        return "An error occurred.", 500
-
-# ##########################################################################
-# #################### নতুন টিভি চ্যানেল রুট শেষ #############################
-# ##########################################################################
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
