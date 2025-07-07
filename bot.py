@@ -1,11 +1,9 @@
-# app.py
 from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
 from functools import wraps
 from dotenv import load_dotenv
-from telegram import Bot
 
 # .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
@@ -17,7 +15,6 @@ MONGO_URI = os.getenv("MONGO_URI")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "password")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # --- অ্যাডমিন অথেন্টিকেশন ফাংশন ---
 def check_auth(username, password):
@@ -40,9 +37,8 @@ def requires_auth(f):
 # --- অথেন্টিকেশন শেষ ---
 
 # Check if environment variables are set
-if not all([MONGO_URI, TMDB_API_KEY, TELEGRAM_BOT_TOKEN, ADMIN_USERNAME, ADMIN_PASSWORD]):
-    print("Error: One or more required environment variables are missing.")
-    print("Required: MONGO_URI, TMDB_API_KEY, TELEGRAM_BOT_TOKEN, ADMIN_USERNAME, ADMIN_PASSWORD")
+if not MONGO_URI or not TMDB_API_KEY:
+    print("Error: MONGO_URI and TMDB_API_KEY environment variables must be set. Exiting.")
     exit(1)
 
 # Database connection
@@ -51,11 +47,12 @@ try:
     db = client["movie_db"]
     movies = db["movies"]
     settings = db["settings"]
+    # === টিভি চ্যানেলের জন্য নতুন কালেকশন ===
+    tv_channels = db["tv_channels"]
     print("Successfully connected to MongoDB!")
 except Exception as e:
     print(f"Error connecting to MongoDB: {e}. Exiting.")
     exit(1)
-
 
 # === Context Processor: সমস্ত টেমপ্লেটে বিজ্ঞাপনের কোড সহজলভ্য করার জন্য ===
 @app.context_processor
@@ -63,8 +60,75 @@ def inject_ads():
     ad_codes = settings.find_one()
     return dict(ad_settings=(ad_codes or {}))
 
+# ##########################################################################
+# ############ নতুন কোড শুরু: স্বয়ংক্রিয়ভাবে চ্যানেল যোগ করা ##############
+# ##########################################################################
 
-# --- START OF index_html TEMPLATE (islice ফিক্স করা হয়েছে) ---
+# কিছু জনপ্রিয় চ্যানেলের তালিকা (এগুলো পরিবর্তনশীল)
+PRE_POPULATED_CHANNELS = [
+    {
+        "name": "Somoy TV",
+        "logo_url": "https://i.ibb.co/FnnKwg2/somoy-tv.png",
+        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/somoyt00p/somoyt00p.stream/somoyt00p.m3u8",
+        "category": "Bangladeshi News"
+    },
+    {
+        "name": "Channel 24",
+        "logo_url": "https://i.ibb.co/qWFp9P6/channel-24.png",
+        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/ch24/ch24.stream/ch24.m3u8",
+        "category": "Bangladeshi News"
+    },
+    {
+        "name": "Jamuna TV",
+        "logo_url": "https://i.ibb.co/QkY1b7b/jamuna-tv.png",
+        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/jamunatv/jamunatv.stream/jamunatv.m3u8",
+        "category": "Bangladeshi News"
+    },
+    {
+        "name": "T-Sports",
+        "logo_url": "https://i.ibb.co/Dtdm4d2/t-sports.png",
+        "stream_url": "https://cdn.appv.jagobd.com:444/c3VydmVyX8RpbEU9Mi8xNy8yMDE0GIDU2LTE4LTEw/tsports/tsports.stream/tsports.m3u8",
+        "category": "Sports"
+    },
+    {
+        "name": "Sony AATH",
+        "logo_url": "https://i.ibb.co/gDFsC22/sony-aath.png",
+        "stream_url": "https://prod-ent-live-gm.sonyliv.com/live/45a6f9f3-d083-494b-9169-d6554b5f1338/master.m3u8",
+        "category": "Indian Entertainment"
+    },
+    {
+        "name": "Zee Bangla",
+        "logo_url": "https://i.ibb.co/hZFXm2X/zee-bangla.png",
+        "stream_url": "http://103.143.15.14/Content/zee-bangla/Live/channel(ZeeBangla)/index.m3u8",
+        "category": "Indian Entertainment"
+    },
+    {
+        "name": "9X Jalwa",
+        "logo_url": "https://i.ibb.co/JqjTqY4/9x-jalwa.png",
+        "stream_url": "https://d2q8p4pe5spbak.cloudfront.net/bpk-tv/9XJALWA/9XJALWA.isml/index.m3u8",
+        "category": "Music"
+    }
+]
+
+def seed_tv_channels():
+    """ডাটাবেসে চ্যানেল না থাকলে স্বয়ংক্রিয়ভাবে যোগ করে"""
+    if tv_channels.count_documents({}) == 0:
+        print("No TV channels found. Seeding the database with pre-populated channels...")
+        try:
+            tv_channels.insert_many(PRE_POPULATED_CHANNELS, ordered=False)
+            print(f"Successfully inserted {len(PRE_POPULATED_CHANNELS)} channels.")
+        except Exception as e:
+            print(f"Error seeding channels: {e}")
+
+# অ্যাপ চালু হওয়ার সময় ফাংশনটি কল করা হচ্ছে
+seed_tv_channels()
+
+# ##########################################################################
+# ############ নতুন কোড শেষ: স্বয়ংক্রিয়ভাবে চ্যানেল যোগ করা ##############
+# ##########################################################################
+
+
+# --- START OF index_html TEMPLATE (নেভিগেশন বারে Live TV যোগ করা হয়েছে) ---
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -94,7 +158,7 @@ index_html = """
   .main-nav {
       position: fixed; top: 0; left: 0; width: 100%; padding: 15px 50px;
       display: flex; justify-content: space-between; align-items: center; z-index: 100;
-      transition: background-color 0.3s ease;
+      transition: background-color: 0.3s ease;
       background: linear-gradient(to bottom, rgba(0,0,0,0.7) 10%, rgba(0,0,0,0));
   }
   .main-nav.scrolled { background-color: var(--netflix-black); }
@@ -252,10 +316,11 @@ index_html = """
       display: flex; flex-direction: column; align-items: center;
       color: var(--text-dark); font-size: 10px; flex-grow: 1;
       padding: 5px 0; transition: color 0.2s ease;
+      text-decoration: none;
   }
   .nav-item i { font-size: 20px; margin-bottom: 4px; }
   .nav-item.active { color: var(--text-light); }
-  .nav-item.active .fa-home { color: var(--netflix-red); }
+  .nav-item.active .fa-home, .nav-item.active .fa-satellite-dish { color: var(--netflix-red); } /* Updated for TV */
   
   /* === বিজ্ঞাপনের কন্টেইনার স্টাইল === */
   .ad-container {
@@ -325,11 +390,11 @@ index_html = """
     </div>
   {% else %} {# Homepage with carousels #}
     
-    {% if hero_movies %}
+    {% if recently_added %}
       <div class="hero-section">
-        {% for movie in hero_movies %}
+        {% for movie in recently_added %}
           <div class="hero-slide {% if loop.first %}active{% endif %}" 
-               style="background-image: url('{{ movie.poster }}');">
+               style="background-image: url('{{ movie.poster or '' }}');">
             <div class="hero-content">
               <h1 class="hero-title">{{ movie.title }}</h1>
               <p class="hero-overview">{{ movie.overview }}</p>
@@ -394,11 +459,12 @@ index_html = """
   <a href="{{ url_for('movies_only') }}" class="nav-item {% if request.endpoint == 'movies_only' %}active{% endif %}">
       <i class="fas fa-film"></i><span>Movies</span>
   </a>
+  <!-- === নতুন লাইভ টিভি বাটন === -->
+  <a href="{{ url_for('live_tv') }}" class="nav-item {% if request.endpoint in ['live_tv', 'watch_tv'] %}active{% endif %}">
+      <i class="fas fa-satellite-dish"></i><span>Live TV</span>
+  </a>
   <a href="{{ url_for('webseries') }}" class="nav-item {% if request.endpoint == 'webseries' %}active{% endif %}">
       <i class="fas fa-tv"></i><span>Series</span>
-  </a>
-  <a href="{{ url_for('coming_soon') }}" class="nav-item {% if request.endpoint == 'coming_soon' %}active{% endif %}">
-      <i class="fas fa-clock"></i><span>Coming Soon</span>
   </a>
 </nav>
 
@@ -449,7 +515,7 @@ index_html = """
 # --- END OF index_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE ---
+# --- START OF detail_html TEMPLATE (Unchanged) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -578,7 +644,7 @@ detail_html = """
 </head>
 <body>
 <header class="detail-header">
-  <a href="{{ request.referrer or url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back</a>
+  <a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a>
 </header>
 {% if movie %}
 <div class="detail-hero">
@@ -683,7 +749,7 @@ function copyToClipboard(text) {
 # --- END OF detail_html TEMPLATE ---
 
 
-# --- START OF watch_html TEMPLATE ---
+# --- START OF watch_html TEMPLATE (Unchanged) ---
 watch_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -694,26 +760,19 @@ watch_html = """
 <style>
     body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
     .player-container { width: 100%; height: 100%; }
-    .player-container iframe, .player-container video { width: 100%; height: 100%; border: 0; }
+    .player-container iframe { width: 100%; height: 100%; border: 0; }
 </style>
 </head>
 <body>
     <div class="player-container">
-        {% if is_direct_link %}
-            <video controls autoplay>
-                <source src="{{ watch_link }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        {% else %}
-            <iframe 
-                src="{{ watch_link }}" 
-                allowfullscreen 
-                allowtransparency 
-                allow="autoplay"
-                scrolling="no" 
-                frameborder="0">
-            </iframe>
-        {% endif %}
+        <iframe 
+            src="{{ watch_link }}" 
+            allowfullscreen 
+            allowtransparency 
+            allow="autoplay"
+            scrolling="no" 
+            frameborder="0">
+        </iframe>
     </div>
 
     <!-- === Pop-under এবং Social Bar বিজ্ঞাপনের জন্য স্ক্রিপ্ট === -->
@@ -729,7 +788,7 @@ watch_html = """
 # --- END OF watch_html TEMPLATE ---
 
 
-# --- START OF admin_html TEMPLATE ---
+# --- START OF admin_html TEMPLATE (TV চ্যানেল ম্যানেজমেন্ট যোগ করা হয়েছে) ---
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -761,7 +820,7 @@ admin_html = """
     }
     button[type="submit"]:hover, .add-episode-btn:hover { background: #b00710; }
     table { display: block; overflow-x: auto; white-space: nowrap; width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); vertical-align: middle; }
     th { background: #252525; }
     td { background: var(--dark-gray); }
     .action-buttons { display: flex; gap: 10px; }
@@ -803,6 +862,57 @@ admin_html = """
     </div>
     <button type="submit">Save Ad Codes</button>
   </form>
+
+  <hr class="section-divider">
+
+  <!-- ================= START: টিভি চ্যানেল ম্যানেজমেন্ট ================= -->
+  <h2>লাইভ টিভি চ্যানেল ম্যানেজমেন্ট</h2>
+  <form method="post" action="{{ url_for('add_channel') }}">
+    <h3>নতুন চ্যানেল যোগ করুন</h3>
+    <div class="form-group">
+      <label for="channel_name">চ্যানেলের নাম:</label>
+      <input type="text" id="channel_name" name="name" required>
+    </div>
+    <div class="form-group">
+      <label for="logo_url">লোগো URL:</label>
+      <input type="url" id="logo_url" name="logo_url" required>
+    </div>
+    <div class="form-group">
+      <label for="stream_url">স্ট্রিম URL (.m3u8):</label>
+      <input type="url" id="stream_url" name="stream_url" required>
+    </div>
+    <div class="form-group">
+      <label for="category">ক্যাটাগরি (e.g., News, Sports, Entertainment):</label>
+      <input type="text" id="category" name="category" required>
+    </div>
+    <button type="submit">চ্যানেল যোগ করুন</button>
+  </form>
+
+  <h3>বিদ্যমান চ্যানেল তালিকা</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>লোগো</th>
+        <th>নাম</th>
+        <th>ক্যাটাগরি</th>
+        <th>একশন</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for channel in tv_channels_list %}
+      <tr>
+        <td><img src="{{ channel.logo_url }}" alt="logo" style="width: 50px; height: auto; background: white; padding: 2px; border-radius: 4px;"></td>
+        <td>{{ channel.name }}</td>
+        <td>{{ channel.category }}</td>
+        <td class="action-buttons">
+          <button class="delete-btn" onclick="confirmChannelDelete('{{ channel._id }}', '{{ channel.name }}')">ডিলিট</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not tv_channels_list %}<p>এখনো কোনো চ্যানেল যোগ করা হয়নি।</p>{% endif %}
+  <!-- ================= END: টিভি চ্যানেল ম্যানেজমেন্ট ================= -->
 
   <hr class="section-divider">
 
@@ -855,6 +965,9 @@ admin_html = """
 
   <script>
     function confirmDelete(id, title) { if (confirm('Delete "' + title + '"?')) window.location.href = '/delete_movie/' + id; }
+    // নতুন ডিলিট ফাংশন
+    function confirmChannelDelete(id, name) { if (confirm('Delete TV Channel "' + name + '"?')) window.location.href = '/admin/delete_channel/' + id; }
+    
     function toggleEpisodeFields() {
         var isSeries = document.getElementById('content_type').value === 'series';
         document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none';
@@ -882,7 +995,7 @@ admin_html = """
 # --- END OF admin_html TEMPLATE ---
 
 
-# --- START OF edit_html TEMPLATE ---
+# --- START OF edit_html TEMPLATE (Unchanged) ---
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -996,7 +1109,180 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
-# ----------------- Flask Routes (islice ফিক্স করা হয়েছে) -----------------
+# ##########################################################################
+# ############ নতুন কোড শুরু: টিভি চ্যানেলের জন্য নতুন টেমপ্লেট ###########
+# ##########################################################################
+
+# --- START OF live_tv_html TEMPLATE ---
+live_tv_html = """
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Live TV - MovieZone</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <style>
+        :root {
+            --netflix-red: #E50914; --netflix-black: #141414;
+            --text-light: #f5f5f5; --text-dark: #a0a0a0;
+            --nav-height: 60px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Roboto', sans-serif; background-color: var(--netflix-black);
+            color: var(--text-light); padding: 20px; padding-bottom: 80px;
+        }
+        .main-header {
+             margin-bottom: 20px;
+        }
+        .main-header h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem; color: var(--netflix-red);
+            text-align: center;
+        }
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 20px;
+        }
+        .channel-card {
+            display: block;
+            text-decoration: none;
+            background-color: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            text-align: center;
+        }
+        .channel-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+        }
+        .channel-logo {
+            width: 100%;
+            height: 120px;
+            object-fit: contain;
+            background-color: #333;
+            padding: 10px;
+        }
+        .channel-name {
+            padding: 10px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .bottom-nav {
+            display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+            height: var(--nav-height); background-color: #181818;
+            border-top: 1px solid #282828; justify-content: space-around;
+            align-items: center; z-index: 200;
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            color: var(--text-dark); font-size: 10px; flex-grow: 1;
+            padding: 5px 0; transition: color 0.2s ease; text-decoration: none;
+        }
+        .nav-item i { font-size: 20px; margin-bottom: 4px; }
+        .nav-item.active { color: var(--text-light); }
+        .nav-item.active .fa-satellite-dish { color: var(--netflix-red); }
+        @media (max-width: 768px) {
+            .channel-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px; }
+            .channel-logo { height: 100px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="main-header">
+        <h1>Live TV Channels</h1>
+    </header>
+
+    <div class="channel-grid">
+        {% for channel in channels %}
+        <a href="{{ url_for('watch_tv', channel_id=channel._id) }}" class="channel-card">
+            <img src="{{ channel.logo_url or 'https://via.placeholder.com/150x150.png?text=No+Logo' }}" alt="{{ channel.name }}" class="channel-logo">
+            <div class="channel-name">{{ channel.name }}</div>
+        </a>
+        {% endfor %}
+        {% if not channels %}
+            <p style="text-align:center; grid-column: 1 / -1;">No TV channels added yet. Please add from admin panel.</p>
+        {% endif %}
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav">
+      <a href="{{ url_for('home') }}" class="nav-item">
+          <i class="fas fa-home"></i><span>Home</span>
+      </a>
+      <a href="{{ url_for('movies_only') }}" class="nav-item">
+          <i class="fas fa-film"></i><span>Movies</span>
+      </a>
+      <a href="{{ url_for('live_tv') }}" class="nav-item active">
+          <i class="fas fa-satellite-dish"></i><span>Live TV</span>
+      </a>
+      <a href="{{ url_for('webseries') }}" class="nav-item">
+          <i class="fas fa-tv"></i><span>Series</span>
+      </a>
+    </nav>
+    
+    <!-- বিজ্ঞাপনের কোড -->
+    {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
+    {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
+</body>
+</html>
+"""
+# --- END OF live_tv_html TEMPLATE ---
+
+
+# --- START OF watch_tv_html TEMPLATE ---
+watch_tv_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watching: {{ channel.name }}</title>
+    <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
+        .player-container { width: 100%; height: 100%; }
+        .video-js { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <video id="live-player" class="video-js vjs-default-skin vjs-big-play-centered" controls autoplay preload="auto">
+            <source src="{{ channel.stream_url }}" type="application/x-mpegURL">
+            <p class="vjs-no-js">
+                To view this video please enable JavaScript, and consider upgrading to a web browser that
+                <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
+            </p>
+        </video>
+    </div>
+
+    <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+    <script>
+        var player = videojs('live-player', {
+            // Player options
+        });
+    </script>
+    
+    {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
+    {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
+</body>
+</html>
+"""
+# --- END OF watch_tv_html TEMPLATE ---
+
+# ##########################################################################
+# ###################### নতুন কোড শেষ ######################################
+# ##########################################################################
+
+
+
+# ----------------- Flask Routes (আপডেট করা হয়েছে) -----------------
 
 @app.route('/')
 def home():
@@ -1008,21 +1294,13 @@ def home():
         context = { "movies": movies_list, "query": f'Results for "{query}"', "is_full_page_list": True }
     else:
         limit = 18
-        # সম্প্রতি যোগ করা মুভির তালিকা আলাদাভাবে নিন
-        all_recent = list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))
-        
-        # হিরো সেকশনের জন্য পোস্টারসহ সর্বোচ্চ ৫টি মুভি নিন
-        hero_movies = [movie for movie in all_recent if movie.get('poster')][:5]
-
         context = {
             "trending_movies": list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_movies": list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "latest_series": list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
             "coming_soon_movies": list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit)),
-            "recently_added": all_recent,
-            "hero_movies": hero_movies, # <<< হিরো সেকশনের জন্য নতুন তালিকা
-            "is_full_page_list": False, 
-            "query": ""
+            "recently_added": list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit)),
+            "is_full_page_list": False, "query": ""
         }
     
     for key, value in context.items():
@@ -1037,15 +1315,52 @@ def movie_detail(movie_id):
     try:
         movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
         if not movie_obj:
-            return render_template_string(detail_html, movie=None, trailer_key=None), 404
+            return "Content not found", 404
 
         movie = dict(movie_obj)
         movie['_id'] = str(movie['_id'])
         
+        needs_poster = not movie.get("poster")
+        needs_overview = not movie.get("overview")
+        needs_release_date = not movie.get("release_date")
+        needs_genres = not movie.get("genres")
         tmdb_id = movie.get("tmdb_id")
         tmdb_type = "tv" if movie.get("type") == "series" else "movie"
         
-        # Fetch trailer key
+        if (needs_poster or needs_overview or needs_release_date or needs_genres or not tmdb_id) and TMDB_API_KEY:
+            if not tmdb_id:
+                search_url = f"https://api.themoviedb.org/3/search/{tmdb_type}?api_key={TMDB_API_KEY}&query={requests.utils.quote(movie['title'])}"
+                try:
+                    search_res = requests.get(search_url, timeout=5).json()
+                    if search_res.get("results"):
+                        tmdb_id = search_res["results"][0].get("id")
+                except requests.RequestException as e:
+                    print(f"TMDb search error for '{movie['title']}': {e}")
+
+            if tmdb_id:
+                detail_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}"
+                try:
+                    res = requests.get(detail_url, timeout=5).json()
+                    update_fields = {"tmdb_id": tmdb_id}
+                    
+                    if needs_poster and res.get("poster_path"): 
+                        update_fields["poster"] = movie["poster"] = f"https://image.tmdb.org/t/p/w500{res['poster_path']}"
+                    if needs_overview and res.get("overview"): 
+                        update_fields["overview"] = movie["overview"] = res["overview"]
+                    if res.get("vote_average"): 
+                        update_fields["vote_average"] = movie["vote_average"] = res.get("vote_average")
+                    if needs_release_date:
+                        release_date = res.get("release_date") if tmdb_type == "movie" else res.get("first_air_date")
+                        if release_date: update_fields["release_date"] = movie["release_date"] = release_date
+                    if needs_genres and res.get("genres"):
+                         update_fields["genres"] = movie["genres"] = [g['name'] for g in res.get("genres", [])]
+
+                    if len(update_fields) > 1:
+                        movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_fields})
+                        print(f"Updated '{movie['title']}' with data from TMDb.")
+                except requests.RequestException as e:
+                    print(f"TMDb detail fetch error for '{movie['title']}': {e}")
+        
         trailer_key = None
         if tmdb_id:
             video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}/videos?api_key={TMDB_API_KEY}"
@@ -1060,7 +1375,7 @@ def movie_detail(movie_id):
         
     except Exception as e:
         print(f"Error in movie_detail: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None), 500
+        return render_template_string(detail_html, movie=None, trailer_key=None)
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
@@ -1080,9 +1395,7 @@ def watch_movie(movie_id):
                     break
         
         if watch_link:
-            is_direct = watch_link.startswith(url_for('stream_file', file_id='', _external=True).rsplit('/', 1)[0])
-            return render_template_string(watch_html, watch_link=watch_link, title=title, is_direct_link=is_direct)
-            
+            return render_template_string(watch_html, watch_link=watch_link, title=title)
         return "Watch link not found for this content.", 404
     except Exception as e:
         print(f"Watch page error: {e}")
@@ -1095,7 +1408,8 @@ def admin():
         content_type = request.form.get("content_type", "movie")
         genres_raw = request.form.get("genres", "")
         movie_data = {
-            "title": request.form.get("title"), "type": content_type,
+            "title": request.form.get("title"),
+            "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "tmdb_id": None,
@@ -1131,9 +1445,16 @@ def admin():
         movies.insert_one(movie_data)
         return redirect(url_for('admin'))
     
+    # GET request এর জন্য ডেটা প্রস্তুত করা
     all_content = list(movies.find().sort('_id', -1))
     for m in all_content: m['_id'] = str(m['_id'])
-    return render_template_string(admin_html, all_content=all_content)
+
+    # টিভি চ্যানেলের তালিকা লোড করুন
+    channels_list = list(tv_channels.find().sort('name', 1))
+    for c in channels_list: c['_id'] = str(c['_id'])
+
+    # টেমপ্লেটে উভয় তালিকা পাস করুন
+    return render_template_string(admin_html, all_content=all_content, tv_channels_list=channels_list)
 
 @app.route('/admin/save_ads', methods=['POST'])
 @requires_auth
@@ -1157,7 +1478,8 @@ def edit_movie(movie_id):
         content_type = request.form.get("content_type", "movie")
         genres_raw = request.form.get("genres", "")
         update_data = {
-            "title": request.form.get("title"), "type": content_type,
+            "title": request.form.get("title"),
+            "type": content_type,
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "poster": request.form.get("poster_url", "").strip(),
@@ -1228,45 +1550,55 @@ def coming_soon():
 def recently_added_all():
     return render_full_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1)), "Recently Added")
 
-# ====================================================================
-# <<< টেলিগ্রাম থেকে ফাইল পরিবেশন করার জন্য রুট >>>
-# ====================================================================
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-@app.route('/stream/<file_id>')
-def stream_file(file_id):
+# ##########################################################################
+# #################### নতুন টিভি চ্যানেল রুটসমূহ ############################
+# ##########################################################################
+
+@app.route('/admin/add_channel', methods=['POST'])
+@requires_auth
+def add_channel():
+    channel_data = {
+        "name": request.form.get("name"),
+        "logo_url": request.form.get("logo_url"),
+        "stream_url": request.form.get("stream_url"),
+        "category": request.form.get("category"),
+    }
+    tv_channels.insert_one(channel_data)
+    return redirect(url_for('admin'))
+
+@app.route('/admin/delete_channel/<channel_id>')
+@requires_auth
+def delete_channel(channel_id):
     try:
-        tg_file = bot.get_file(file_id)
-        file_url = tg_file.file_path
-        
-        req = requests.get(file_url, stream=True)
-        return Response(req.iter_content(chunk_size=1024*1024), mimetype=req.headers['Content-Type'])
+        tv_channels.delete_one({"_id": ObjectId(channel_id)})
     except Exception as e:
-        print(f"Streaming error for file_id {file_id}: {e}")
-        return "Error: Could not stream the file. The link might have expired or the bot token is invalid.", 404
+        print(f"Error deleting channel: {e}")
+    return redirect(url_for('admin'))
 
-@app.route('/download/<file_id>')
-def download_file(file_id):
+@app.route('/live-tv')
+def live_tv():
+    all_channels = list(tv_channels.find().sort('name', 1))
+    for channel in all_channels:
+        channel['_id'] = str(channel['_id'])
+    return render_template_string(live_tv_html, channels=all_channels)
+
+@app.route('/watch-tv/<channel_id>')
+def watch_tv(channel_id):
     try:
-        tg_file = bot.get_file(file_id)
+        channel = tv_channels.find_one({"_id": ObjectId(channel_id)})
+        if not channel or not channel.get("stream_url"):
+            return "Channel stream not found.", 404
         
-        file_info_url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}'
-        file_info_res = requests.get(file_info_url).json()
-        if not file_info_res.get('ok'):
-             raise Exception(f"Failed to get file info: {file_info_res.get('description')}")
-        
-        original_filename = os.path.basename(file_info_res['result']['file_path'])
-
-        req = requests.get(tg_file.file_path, stream=True)
-        
-        return Response(
-            req.iter_content(chunk_size=1024*1024), 
-            mimetype=req.headers['Content-Type'],
-            headers={"Content-Disposition": f"attachment;filename=\"{original_filename}\""}
-        )
+        return render_template_string(watch_tv_html, channel=channel)
     except Exception as e:
-        print(f"Download error for file_id {file_id}: {e}")
-        return "Error: Could not process the download.", 404
+        print(f"Watch TV error: {e}")
+        return "An error occurred.", 500
+
+# ##########################################################################
+# #################### নতুন টিভি চ্যানেল রুট শেষ #############################
+# ##########################################################################
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
