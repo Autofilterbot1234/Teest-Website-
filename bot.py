@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, url_for, Response
+from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
@@ -330,7 +330,9 @@ index_html = """
               <h1 class="hero-title">{{ movie.title }}</h1>
               <p class="hero-overview">{{ movie.overview }}</p>
               <div class="hero-buttons">
-                 {% if movie.watch_link and not movie.is_coming_soon %}<a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
+                 {% if (movie.watch_link or movie.links) and not movie.is_coming_soon %}
+                    <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>
+                 {% endif %}
                 <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-secondary"><i class="fas fa-info-circle"></i> More Info</a>
               </div>
             </div>
@@ -478,7 +480,7 @@ genres_html = """
 # --- END OF genres_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (MODIFIED FOR MODAL PLAYER) ---
+# --- START OF detail_html TEMPLATE (FULLY UPDATED) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -507,64 +509,57 @@ detail_html = """
   .watch-now-btn { background-color: var(--netflix-red); color: white; padding: 15px 30px; font-size: 1.2rem; font-weight: 700; border: none; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; margin-bottom: 25px; transition: transform 0.2s ease, background-color 0.2s ease; }
   .watch-now-btn:hover { transform: scale(1.05); background-color: #f61f29; }
   .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 20px; padding-bottom: 5px; border-bottom: 2px solid var(--netflix-red); display: inline-block; }
-  .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; background: #000; border-radius: 8px; }
-  .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .download-section { margin-top: 30px; }
-  .download-button, .episode-download-button { display: inline-block; padding: 12px 25px; background-color: #444; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px; text-align: center; vertical-align: middle; border: none; cursor: pointer; font-family: 'Roboto', sans-serif; font-size: 1rem; }
+  .download-button, .episode-watch-button { display: inline-block; padding: 12px 25px; background-color: #444; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px; text-align: center; vertical-align: middle; border: none; cursor: pointer; font-family: 'Roboto', sans-serif; font-size: 1rem; }
   .copy-button { background-color: #555; color: white; border: none; padding: 8px 15px; font-size: 0.9rem; cursor: pointer; border-radius: 4px; margin-left: -5px; margin-bottom: 10px; vertical-align: middle; }
   .episode-item { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #333; }
   .episode-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #fff; }
   .ad-container { margin: 30px 0; text-align: center; }
-  .related-section-container { padding: 40px 0; background-color: #181818; }
-  .carousel-row { margin: 40px 0; position: relative; }
-  .carousel-wrapper { position: relative; }
-  .carousel-content { display: flex; gap: 10px; padding: 0 50px; overflow-x: scroll; scrollbar-width: none; scroll-behavior: smooth; }
-  .carousel-content::-webkit-scrollbar { display: none; }
-  .carousel-arrow { position: absolute; top: 0; height: 100%; background-color: rgba(20, 20, 20, 0.5); border: none; color: white; font-size: 2.5rem; cursor: pointer; z-index: 10; width: 50px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; }
-  .carousel-row:hover .carousel-arrow { opacity: 1; }
-  .carousel-arrow.prev { left: 0; }
-  .carousel-arrow.next { right: 0; }
-  .related-movie-card-wrapper { flex: 0 0 16.66%; min-width: 220px; }
-  .movie-card { width: 100%; border-radius: 4px; overflow: hidden; cursor: pointer; transition: transform 0.3s ease; display: block; position: relative; }
-  .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
-  .poster-badge { position: absolute; top: 10px; left: 10px; background-color: var(--netflix-red); color: white; padding: 5px 10px; font-size: 12px; font-weight: 700; border-radius: 4px; z-index: 3; }
-  @keyframes rgb-glow { 0% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; } 33% { box-shadow: 0 0 12px #4158D0, 0 0 4px #4158D0; } 66% { box-shadow: 0 0 12px #C850C0, 0 0 4px #C850C0; } 100% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; } }
-  @media (hover: hover) { .movie-card:hover { transform: scale(1.05); z-index: 5; animation: rgb-glow 2.5s infinite linear; } }
-  @media (max-width: 992px) { .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; } .detail-info { max-width: 100%; } .detail-title { font-size: 3.5rem; } }
-  @media (max-width: 768px) { .detail-header { padding: 20px; } .detail-hero { padding: 80px 20px 40px; } .detail-poster { width: 60%; max-width: 220px; height: auto; } .detail-title { font-size: 2.2rem; } .watch-now-btn, .download-button, .episode-download-button, .copy-button { display: block; width: 100%; max-width: 320px; margin: 0 auto 10px auto; } .section-title { margin-left: 15px !important; } .related-section-container { padding: 20px 0; } .carousel-content { padding: 0 15px; } .related-movie-card-wrapper { min-width: 130px; } .carousel-arrow { display: none; } }
-
-  /* --- START: Player Modal Styles (NEW) --- */
-  .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background-color: rgba(0, 0, 0, 0.85); z-index: 1000; display: flex;
-      justify-content: center; align-items: center; backdrop-filter: blur(5px);
-  }
-  .modal-content {
-      position: relative; background-color: #000; border: 1px solid #333;
-      width: 90%; max-width: 1200px; aspect-ratio: 16 / 9; box-shadow: 0 5px 25px rgba(0,0,0,0.5);
-  }
-  .close-modal-btn {
-      position: absolute; top: -40px; right: 0; color: #fff; font-size: 35px;
-      font-weight: bold; cursor: pointer; transition: color 0.3s;
-  }
+  
+  /* --- MODAL PLAYER STYLES --- */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
+  .modal-container { display: flex; flex-direction: column; width: 95%; max-width: 1200px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; color: white; }
+  .modal-title { font-size: 1.5rem; font-weight: 700; }
+  .close-modal-btn { font-size: 2rem; font-weight: bold; cursor: pointer; transition: color 0.3s; background: none; border: none; color: white; }
   .close-modal-btn:hover { color: var(--netflix-red); }
+  .modal-content { position: relative; background-color: #000; border: 1px solid #333; width: 100%; aspect-ratio: 16 / 9; box-shadow: 0 5px 25px rgba(0,0,0,0.5); }
   .video-player-container { width: 100%; height: 100%; }
   .video-player-container iframe { width: 100%; height: 100%; border: 0; }
+  .modal-controls { display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #1a1a1a; border-radius: 0 0 8px 8px; }
+  .control-group-left { display: flex; align-items: center; gap: 20px; }
+  .control-group-right { display: flex; align-items: center; gap: 15px; }
+  .modal-control-btn { background-color: #333; color: var(--text-light); border: 1px solid #555; padding: 8px 15px; border-radius: 5px; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s ease; text-decoration: none; }
+  .modal-control-btn:hover { background-color: #444; }
+  .modal-control-btn.liked { background-color: #007bff; color: white; border-color: #007bff; }
+  .quality-selector select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; font-weight: bold; }
+  
+  /* --- LIKE/COMMENT STYLES --- */
+  .interaction-section { padding: 20px 0; margin-top: 30px; border-top: 1px solid #333; }
+  .comments-container { margin-top: 20px; }
+  .comment-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+  .comment-form input, .comment-form textarea { width: 100%; padding: 12px; background-color: #222; border: 1px solid #444; border-radius: 5px; color: var(--text-light); font-size: 1rem; }
+  .comment-form textarea { min-height: 80px; resize: vertical; }
+  .comment-form button { align-self: flex-end; background-color: var(--netflix-red); color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+  #comments-list { list-style: none; padding: 0; }
+  .comment-item { display: flex; gap: 15px; padding: 15px 0; border-bottom: 1px solid #2a2a2a; }
+  .comment-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: var(--netflix-red); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+  .comment-body { flex-grow: 1; }
+  .comment-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+  .comment-username { font-weight: bold; color: var(--text-light); }
+  .comment-timestamp { font-size: 0.8rem; color: var(--text-dark); }
+  .comment-text { color: #ccc; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+
   @media (max-width: 768px) {
-      .modal-content { width: 100%; height: auto; aspect-ratio: 16/9; }
-      .close-modal-btn { top: -30px; font-size: 28px; }
+    .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; }
+    .detail-poster { width: 60%; max-width: 220px; height: auto; }
+    .watch-now-btn, .download-button, .episode-watch-button { display: block; width: 100%; max-width: 320px; margin: 0 auto 10px auto; }
+    .modal-controls { flex-direction: column; gap: 10px; align-items: stretch; }
   }
-  /* --- END: Player Modal Styles --- */
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
-{% macro render_movie_card(m) %}
-    <a href="{{ url_for('movie_detail', movie_id=m._id) }}" class="movie-card">
-    {% if m.poster_badge %}<div class="poster-badge">{{ m.poster_badge }}</div>{% endif %}
-    <img class="movie-poster" loading="lazy" src="{{ m.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ m.title }}">
-    </a>
-{% endmacro %}
 
 <header class="detail-header"><a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a></header>
 {% if movie %}
@@ -581,117 +576,246 @@ detail_html = """
       </div>
       <p class="detail-overview">{{ movie.overview }}</p>
       
-      <!-- MODIFIED: Watch button is now a button with data-attribute -->
-      {% if movie.watch_link and movie.type == 'movie' and not movie.is_coming_soon %}
-        <button class="watch-now-btn" data-watch-url="{{ movie.watch_link }}">
+      {% if (movie.watch_link or (movie.links and movie.links|length > 0)) and movie.type == 'movie' and not movie.is_coming_soon %}
+        <button class="watch-now-btn" onclick="openPlayerModal('{{ movie._id }}', 'movie')">
             <i class="fas fa-play"></i> Watch Now
         </button>
       {% endif %}
 
-      {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
-      {% if trailer_key %}<div class="trailer-section"><h3 class="section-title">Watch Trailer</h3><div class="video-container"><iframe src="https://www.youtube.com/embed/{{ trailer_key }}" frameborder="0" allowfullscreen></iframe></div></div>{% endif %}
-      {% if ad_settings.native_banner_code %}<div class="ad-container">{{ ad_settings.native_banner_code|safe }}</div>{% endif %}
-      <div style="margin: 20px 0;"><a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="download-button" style="background-color:#5a5a5a; text-align:center;"><i class="fas fa-flag"></i> Report a Problem</a></div>
       <div class="download-section">
         {% if movie.is_coming_soon %}<h3 class="section-title">Coming Soon</h3>
-        {% elif movie.type == 'movie' and movie.links %}<h3 class="section-title">Download Links</h3>{% for link_item in movie.links %}<div><a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }} [{{ link_item.size or 'N/A' }}]</a><button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i> Copy</button></div>{% endfor %}
-        {% elif movie.type == 'series' and movie.episodes %}<h3 class="section-title">Episodes</h3>{% for episode in movie.episodes | sort(attribute='episode_number') %}<div class="episode-item"><h4 class="episode-title">E{{ episode.episode_number }}: {{ episode.title }}</h4>{% if episode.overview %}<p class="episode-overview-text">{{ episode.overview }}</p>{% endif %}
-        
-        <!-- MODIFIED: Watch Episode button is now a button with data-attribute -->
-        {% if episode.watch_link %}
-            <button class="episode-download-button" style="background-color: var(--netflix-red);" data-watch-url="{{ episode.watch_link }}"><i class="fas fa-play"></i> Watch Episode</button>
+        {% elif movie.type == 'series' and movie.episodes %}
+          <h3 class="section-title">Episodes</h3>
+          {% for episode in movie.episodes | sort(attribute='episode_number') %}
+          <div class="episode-item">
+            <h4 class="episode-title">E{{ episode.episode_number }}: {{ episode.title }}</h4>
+            {% if (episode.watch_link or (episode.links and episode.links|length > 0)) %}
+                <button class="episode-watch-button" style="background-color: var(--netflix-red);" onclick="openPlayerModal('{{ movie._id }}', 'series', {{ episode.episode_number }})">
+                    <i class="fas fa-play"></i> Watch Episode
+                </button>
+            {% endif %}
+          </div>
+          {% endfor %}
         {% endif %}
+      </div>
+      
+      <div style="margin-top: 30px;">
+          <a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="download-button" style="background-color:#5a5a5a; text-align:center;"><i class="fas fa-flag"></i> Report a Problem</a>
+      </div>
 
-        {% if episode.links %}{% for link_item in episode.links %}<div><a class="episode-download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }}</a><button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i></button></div>{% endfor %}{% endif %}</div>{% endfor %}
-        {% endif %}
-        {% if not movie.links and not movie.episodes and not movie.is_coming_soon %}<p class="no-link-message">No download links available.</p>{% endif %}
+      <!-- Interaction Section (Like/Comment) -->
+      <div class="interaction-section">
+          <h3 class="section-title">Feedback</h3>
+          <div class="comments-container">
+              <div class="comment-form">
+                  <input type="text" id="usernameInput" placeholder="Your Name" required>
+                  <textarea id="commentInput" placeholder="Write a comment..." required></textarea>
+                  <button id="postCommentBtn">Post Comment</button>
+              </div>
+              <ul id="comments-list"></ul>
+          </div>
       </div>
     </div>
   </div>
 </div>
-{% if related_movies %}
-<div class="related-section-container">
-    <div class="carousel-row" style="margin-top: 20px; margin-bottom: 20px;">
-        <h3 class="section-title" style="margin-left: 50px; border-color: var(--netflix-red); color: white;">You Might Also Like</h3>
-        <div class="carousel-wrapper">
-            <div class="carousel-content">{% for m in related_movies %}<div class="related-movie-card-wrapper">{{ render_movie_card(m) }}</div>{% endfor %}</div>
-            <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
-            <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
-        </div>
-    </div>
-</div>
+{% else %}
+  <div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>
 {% endif %}
-{% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
 
-<!-- NEW: Player Modal Structure -->
+<!-- Player Modal Structure -->
 <div id="playerModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
-        <span class="close-modal-btn">×</span>
-        <div class="video-player-container">
-            <!-- The iframe will be injected here by JavaScript -->
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3 id="modalTitle" class="modal-title"></h3>
+            <button class="close-modal-btn">×</button>
+        </div>
+        <div class="modal-content">
+            <div id="modalPlayerContainer" class="video-player-container"></div>
+        </div>
+        <div class="modal-controls">
+            <div class="control-group-left">
+                <button id="modalLikeBtn" class="modal-control-btn"><i class="far fa-thumbs-up"></i> <span id="modalLikeCount">0</span></button>
+            </div>
+            <div class="control-group-right">
+                <div id="qualitySelectorContainer" class="quality-selector"></div>
+                <a id="modalDownloadBtn" href="#" target="_blank" class="modal-control-btn" style="display: none;"><i class="fas fa-download"></i> Download</a>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('Link copied!'), () => alert('Copy failed!')); }
-document.querySelectorAll('.carousel-arrow').forEach(button => {
-    button.addEventListener('click', () => {
-        const carousel = button.closest('.carousel-wrapper').querySelector('.carousel-content');
-        const scrollAmount = carousel.clientWidth * 0.8;
-        carousel.scrollLeft += button.classList.contains('next') ? scrollAmount : -scrollAmount;
-    });
-});
 
-// --- START: Modal Player Logic (NEW) ---
-document.addEventListener('DOMContentLoaded', () => {
-    const playerModal = document.getElementById('playerModal');
-    if (!playerModal) return; // Exit if modal not found
-    const modalPlayerContainer = playerModal.querySelector('.video-player-container');
-    const closeModalBtn = playerModal.querySelector('.close-modal-btn');
+// --- PLAYER MODAL LOGIC ---
+const playerModal = document.getElementById('playerModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalPlayerContainer = document.getElementById('modalPlayerContainer');
+const modalLikeBtn = document.getElementById('modalLikeBtn');
+const modalLikeCount = document.getElementById('modalLikeCount');
+const qualitySelectorContainer = document.getElementById('qualitySelectorContainer');
+const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+let currentMovieIdForModal = null;
 
-    function openPlayer(watchUrl) {
-        const iframe = document.createElement('iframe');
-        iframe.setAttribute('src', watchUrl);
-        iframe.setAttribute('allowfullscreen', '');
-        iframe.setAttribute('allowtransparency', '');
-        iframe.setAttribute('allow', 'autoplay');
-        iframe.setAttribute('scrolling', 'no');
-        iframe.setAttribute('frameborder', '0');
-        modalPlayerContainer.innerHTML = '';
-        modalPlayerContainer.appendChild(iframe);
+async function openPlayerModal(contentId, type, episodeNumber = null) {
+    currentMovieIdForModal = contentId;
+    const url = episodeNumber 
+        ? `/api/media-details/${contentId}?episode=${episodeNumber}` 
+        : `/api/media-details/${contentId}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!data.success) {
+            alert('Could not load video details.');
+            return;
+        }
+        
+        const media = data.media;
+        modalTitle.textContent = media.title;
+        
+        let sources = [];
+        if (media.watch_link) sources.push({ quality: 'HD', url: media.watch_link });
+        if (media.links) sources = sources.concat(media.links);
+        
+        if (sources.length === 0) {
+            modalPlayerContainer.innerHTML = '<p style="color:white;text-align:center;padding:20px;">No watchable link found.</p>';
+            qualitySelectorContainer.innerHTML = '';
+            modalDownloadBtn.style.display = 'none';
+        } else {
+            // Populate quality selector
+            let qualityOptions = sources.map(s => `<option value="${s.url}">${s.quality}</option>`).join('');
+            qualitySelectorContainer.innerHTML = `<select id="qualitySelect">${qualityOptions}</select>`;
+            
+            // Set initial player
+            const initialSource = sources[0].url;
+            updatePlayer(initialSource);
+            
+            // Set download button
+            const downloadLink = sources.find(s => s.url.includes('download')) || sources[0];
+            modalDownloadBtn.href = downloadLink.url;
+            modalDownloadBtn.style.display = 'inline-flex';
+
+            // Add event listener for quality change
+            document.getElementById('qualitySelect').addEventListener('change', (e) => {
+                updatePlayer(e.target.value);
+            });
+        }
+        
+        updateLikeButtonState(contentId);
         playerModal.style.display = 'flex';
+        
+    } catch (error) {
+        console.error('Error fetching media details:', error);
     }
+}
 
-    function closePlayer() {
-        modalPlayerContainer.innerHTML = ''; // This stops the video
-        playerModal.style.display = 'none';
-    }
+function updatePlayer(url) {
+    modalPlayerContainer.innerHTML = `<iframe src="${url}" allowfullscreen allowtransparency allow="autoplay" scrolling="no" frameborder="0"></iframe>`;
+}
 
-    document.querySelectorAll('[data-watch-url]').forEach(button => {
-        button.addEventListener('click', (event) => {
-            const watchUrl = event.currentTarget.dataset.watchUrl;
-            if (watchUrl) {
-                openPlayer(watchUrl);
-            }
-        });
-    });
+function closePlayerModal() {
+    modalPlayerContainer.innerHTML = ''; // Stop video
+    playerModal.style.display = 'none';
+}
 
-    closeModalBtn.addEventListener('click', closePlayer);
-
-    playerModal.addEventListener('click', (event) => {
-        if (event.target === playerModal) {
-            closePlayer();
-        }
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && playerModal.style.display === 'flex') {
-            closePlayer();
-        }
-    });
+document.querySelector('.close-modal-btn').addEventListener('click', closePlayerModal);
+playerModal.addEventListener('click', (e) => {
+    if (e.target === playerModal) closePlayerModal();
 });
-// --- END: Modal Player Logic ---
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && playerModal.style.display === 'flex') closePlayerModal();
+});
+
+// --- LIKE/COMMENT LOGIC ---
+async function updateLikeButtonState(movieId) {
+    const res = await fetch(`/api/movie/${movieId}/interactions`);
+    const data = await res.json();
+    if (data.success) {
+        modalLikeCount.textContent = data.likes;
+        if (localStorage.getItem(`liked_${movieId}`) === 'true') {
+            modalLikeBtn.classList.add('liked');
+            modalLikeBtn.querySelector('i').className = 'fas fa-thumbs-up';
+        } else {
+            modalLikeBtn.classList.remove('liked');
+            modalLikeBtn.querySelector('i').className = 'far fa-thumbs-up';
+        }
+    }
+}
+
+modalLikeBtn.addEventListener('click', async () => {
+    if (modalLikeBtn.classList.contains('liked') || !currentMovieIdForModal) return;
+    const res = await fetch(`/api/movie/${currentMovieIdForModal}/like`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+        modalLikeCount.textContent = data.likes;
+        modalLikeBtn.classList.add('liked');
+        modalLikeBtn.querySelector('i').className = 'fas fa-thumbs-up';
+        localStorage.setItem(`liked_${currentMovieIdForModal}`, 'true');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const interactionSection = document.querySelector('.interaction-section');
+    if (!interactionSection) return;
+
+    const movieId = "{{ movie._id }}";
+    const commentsList = document.getElementById('comments-list');
+    const usernameInput = document.getElementById('usernameInput');
+    const commentInput = document.getElementById('commentInput');
+    const postCommentBtn = document.getElementById('postCommentBtn');
+
+    function addCommentToDOM(comment) {
+        const avatarLetter = comment.username.charAt(0).toUpperCase();
+        const li = document.createElement('li');
+        li.className = 'comment-item';
+        li.innerHTML = `
+            <div class="comment-avatar">${avatarLetter}</div>
+            <div class="comment-body">
+                <div class="comment-meta">
+                    <span class="comment-username">${escapeHTML(comment.username)}</span>
+                    <span class="comment-timestamp">${comment.timestamp}</span>
+                </div>
+                <p class="comment-text">${escapeHTML(comment.text)}</p>
+            </div>
+        `;
+        commentsList.prepend(li);
+    }
+    
+    function escapeHTML(str) {
+        var p = document.createElement("p"); p.appendChild(document.createTextNode(str)); return p.innerHTML;
+    }
+
+    async function loadComments() {
+        const response = await fetch(`/api/movie/${movieId}/interactions`);
+        const data = await response.json();
+        if (data.success) {
+            commentsList.innerHTML = '';
+            data.comments.forEach(addCommentToDOM);
+        }
+    }
+
+    postCommentBtn.addEventListener('click', async () => {
+        const username = usernameInput.value.trim();
+        const text = commentInput.value.trim();
+        if (!username || !text) return alert('Please enter your name and a comment.');
+
+        const response = await fetch(`/api/movie/${movieId}/comment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, text })
+        });
+        const data = await response.json();
+        if (data.success) {
+            addCommentToDOM(data.comment);
+            commentInput.value = '';
+        } else {
+            alert('Failed to post comment.');
+        }
+    });
+    
+    loadComments();
+});
 </script>
 {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
 {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
@@ -701,25 +825,8 @@ document.addEventListener('DOMContentLoaded', () => {
 # --- END OF detail_html TEMPLATE ---
 
 
-# --- START OF watch_html TEMPLATE ---
-watch_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Watching: {{ title }}</title>
-<style> body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; } .player-container { width: 100%; height: 100%; } .player-container iframe { width: 100%; height: 100%; border: 0; } </style>
-</head>
-<body>
-    <div class="player-container"><iframe src="{{ watch_link }}" allowfullscreen allowtransparency allow="autoplay" scrolling="no" frameborder="0"></iframe></div>
-    {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
-    {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
-</body>
-</html>
-"""
-# --- END OF watch_html TEMPLATE ---
-
-
-# --- START OF admin_html TEMPLATE ---
+# --- START OF admin_html TEMPLATE (Unchanged) ---
+# ... (admin_html from previous responses, no changes needed here)
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -764,7 +871,7 @@ admin_html = """
     <div class="form-group"><label>Title (Required):</label><input type="text" name="title" required /></div>
     <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="series">TV/Web Series</option></select></div>
     <div id="movie_fields">
-        <div class="form-group"><label>Watch Link (Embed URL):</label><input type="url" name="watch_link" /></div><hr><p style="text-align:center; font-weight:bold;">OR Download Links</p>
+        <div class="form-group"><label>Watch Link (Embed URL, e.g., 720p default):</label><input type="url" name="watch_link" /></div><hr><p style="text-align:center; font-weight:bold;">OR Download/Quality Links</p>
         <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" /></div><div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" /></div><div class="form-group"><label>1080p Link:</label><input type="url" name="link_1080p" /></div>
     </div>
     <div id="episode_fields" style="display: none;"><h3>Episodes</h3><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button></div>
@@ -780,8 +887,8 @@ admin_html = """
   </form>
   <hr class="section-divider">
   <h2>Manage Content</h2>
-  <table><thead><tr><th>Title</th><th>Type</th><th>Badge</th><th>Actions</th></tr></thead><tbody>
-    {% for movie in all_content %}<tr><td>{{ movie.title }}</td><td>{{ movie.type | title }}</td><td>{{ movie.poster_badge or 'N/A' }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="edit-btn">Edit</a><button class="delete-btn" onclick="confirmDelete('{{ movie._id }}', '{{ movie.title }}')">Delete</button></td></tr>{% endfor %}
+  <table><thead><tr><th>Title</th><th>Type</th><th>Badge</th><th>Likes</th><th>Actions</th></tr></thead><tbody>
+    {% for movie in all_content %}<tr><td>{{ movie.title }}</td><td>{{ movie.type | title }}</td><td>{{ movie.poster_badge or 'N/A' }}</td><td>{{ movie.likes or 0 }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="edit-btn">Edit</a><button class="delete-btn" onclick="confirmDelete('{{ movie._id }}', '{{ movie.title }}')">Delete</button></td></tr>{% endfor %}
   </tbody></table>
   {% if not all_content %}<p>No content found.</p>{% endif %}
   <hr class="section-divider">
@@ -794,7 +901,7 @@ admin_html = """
   <script>
     function confirmDelete(id, title) { if (confirm('Delete "' + title + '"?')) window.location.href = '/delete_movie/' + id; }
     function toggleEpisodeFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" /></div><hr><p>OR Download Links</p><div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div><div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn" style="padding: 6px 12px;">Remove Ep</button>`; c.appendChild(d); }
+    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link (Default):</label><input type="url" name="episode_watch_link[]" /></div><hr><p>OR Download/Quality Links</p><div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div><div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn" style="padding: 6px 12px;">Remove Ep</button>`; c.appendChild(d); }
     document.addEventListener('DOMContentLoaded', toggleEpisodeFields);
   </script>
 </body></html>
@@ -802,7 +909,8 @@ admin_html = """
 # --- END OF admin_html TEMPLATE ---
 
 
-# --- START OF edit_html TEMPLATE ---
+# --- START OF edit_html TEMPLATE (Unchanged) ---
+# ... (edit_html from previous responses, no changes needed here)
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -833,7 +941,7 @@ edit_html = """
     <div class="form-group"><label>Title:</label><input type="text" name="title" value="{{ movie.title }}" required /></div>
     <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>TV/Web Series</option></select></div>
     <div id="movie_fields">
-        <div class="form-group"><label>Watch Link:</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div><hr><p style="text-align:center; font-weight:bold;">OR Download Links</p>
+        <div class="form-group"><label>Watch Link (Default):</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div><hr><p style="text-align:center; font-weight:bold;">OR Download/Quality Links</p>
         <div class="form-group"><label>480p Link:</label><input type="url" name="link_480p" value="{% for l in movie.links %}{% if l.quality == '480p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
         <div class="form-group"><label>720p Link:</label><input type="url" name="link_720p" value="{% for l in movie.links %}{% if l.quality == '720p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
         <div class="form-group"><label>1080p Link:</label><input type="url" name="link_1080p" value="{% for l in movie.links %}{% if l.quality == '1080p' %}{{ l.url }}{% endif %}{% endfor %}" /></div>
@@ -844,7 +952,7 @@ edit_html = """
         <div class="episode-item">
             <div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required /></div>
             <div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" value="{{ ep.title }}" required /></div>
-            <div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div><hr><p>OR Download Links</p>
+            <div class="form-group"><label>Watch Link (Default):</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div><hr><p>OR Download/Quality Links</p>
             <div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" value="{% for l in ep.links %}{% if l.quality=='480p'%}{{l.url}}{%endif%}{%endfor%}" /></div>
             <div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" value="{% for l in ep.links %}{% if l.quality=='720p'%}{{l.url}}{%endif%}{%endfor%}" /></div>
             <button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>
@@ -865,7 +973,7 @@ edit_html = """
   </form>
   <script>
     function toggleEpisodeFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" /></div><hr><p>OR Download Links</p><div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div><div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
+    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link (Default):</label><input type="url" name="episode_watch_link[]" /></div><hr><p>OR Download/Quality Links</p><div class="form-group"><label>480p Link:</label><input type="url" name="episode_link_480p[]" /></div><div class="form-group"><label>720p Link:</label><input type="url" name="episode_link_720p[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
     document.addEventListener('DOMContentLoaded', toggleEpisodeFields);
   </script>
 </body></html>
@@ -873,7 +981,8 @@ edit_html = """
 # --- END OF edit_html TEMPLATE ---
 
 
-# --- START OF contact_html TEMPLATE ---
+# --- START OF contact_html TEMPLATE (Unchanged) ---
+# ... (contact_html from previous responses, no changes needed here)
 contact_html = """
 <!DOCTYPE html>
 <html lang="bn">
@@ -924,7 +1033,7 @@ contact_html = """
 # --- END OF contact_html TEMPLATE ---
 
 
-# ----------------- Flask Routes (Final Version) -----------------
+# ----------------- Flask Routes (Fully Updated) -----------------
 
 def get_tmdb_details(movie_obj):
     if not TMDB_API_KEY: return movie_obj
@@ -955,6 +1064,7 @@ def get_tmdb_details(movie_obj):
     return movie_obj
 
 def get_trailer_key(tmdb_id, tmdb_type):
+    # This function is no longer used in detail_html, but kept for potential future use
     if not TMDB_API_KEY or not tmdb_id: return None
     try:
         video_url = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}/videos?api_key={TMDB_API_KEY}"
@@ -998,39 +1108,92 @@ def movie_detail(movie_id):
         if not movie_obj: return "Content not found", 404
         
         movie = get_tmdb_details(dict(movie_obj))
-        movie['_id'] = str(movie['_id'])
+        movie['_id'] = str(movie['_id']) # Convert ObjectId for template
         
-        related_movies = []
-        if movie.get("genres"):
-            related_movies = list(movies.find({"genres": {"$in": movie["genres"]}, "_id": {"$ne": ObjectId(movie_id)}}).limit(12))
-        if not related_movies:
-            related_movies = list(movies.find({"_id": {"$ne": ObjectId(movie_id)}, "is_coming_soon": {"$ne": True}}).sort("_id", -1).limit(12))
-
-        trailer_key = get_trailer_key(movie.get("tmdb_id"), "tv" if movie.get("type") == "series" else "movie")
-        
-        return render_template_string(detail_html, movie=movie, trailer_key=trailer_key, related_movies=process_movie_list(related_movies))
+        return render_template_string(detail_html, movie=movie)
     except Exception as e:
         print(f"Error in movie_detail: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None, related_movies=[])
+        return render_template_string(detail_html, movie=None)
 
-@app.route('/watch/<movie_id>')
-def watch_movie(movie_id):
+# --- NEW/UPDATED API Routes ---
+
+@app.route('/api/media-details/<content_id>')
+def get_media_details(content_id):
+    episode_number = request.args.get('episode', type=int)
     try:
-        movie = movies.find_one({"_id": ObjectId(movie_id)})
-        if not movie: return "Content not found.", 404
-        watch_link, title = movie.get("watch_link"), movie.get("title")
-        episode_num = request.args.get('ep')
-        if episode_num and movie.get('type') == 'series' and movie.get('episodes'):
-            for ep in movie['episodes']:
-                if str(ep.get('episode_number')) == episode_num:
-                    watch_link, title = ep.get('watch_link'), f"{title} - E{episode_num}: {ep.get('title')}"
-                    break
-        if watch_link: return render_template_string(watch_html, watch_link=watch_link, title=title)
-        return "Watch link not found for this content.", 404
-    except Exception as e:
-        print(f"Watch page error: {e}")
-        return "An error occurred.", 500
+        movie = movies.find_one({'_id': ObjectId(content_id)})
+        if not movie:
+            return jsonify({'success': False, 'message': 'Content not found'}), 404
 
+        if episode_number is not None and movie.get('type') == 'series':
+            # Find the specific episode
+            episode_data = next((ep for ep in movie.get('episodes', []) if ep.get('episode_number') == episode_number), None)
+            if not episode_data:
+                return jsonify({'success': False, 'message': 'Episode not found'}), 404
+            
+            # Prepare episode media details
+            media = {
+                'title': f"{movie['title']} - E{episode_data['episode_number']}: {episode_data['title']}",
+                'watch_link': episode_data.get('watch_link'),
+                'links': episode_data.get('links', [])
+            }
+        else:
+            # Prepare movie media details
+            media = {
+                'title': movie['title'],
+                'watch_link': movie.get('watch_link'),
+                'links': movie.get('links', [])
+            }
+        return jsonify({'success': True, 'media': media})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/movie/<movie_id>/like', methods=['POST'])
+def like_movie(movie_id):
+    try:
+        result = movies.update_one({'_id': ObjectId(movie_id)}, {'$inc': {'likes': 1}}, upsert=True)
+        if result.modified_count > 0 or result.upserted_id is not None:
+            movie = movies.find_one({'_id': ObjectId(movie_id)}, {'likes': 1})
+            return jsonify({'success': True, 'likes': movie.get('likes', 0)})
+        return jsonify({'success': False, 'message': 'Movie not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/movie/<movie_id>/comment', methods=['POST'])
+def comment_on_movie(movie_id):
+    data = request.get_json()
+    username = data.get('username')
+    text = data.get('text')
+    if not username or not text:
+        return jsonify({'success': False, 'message': 'Username and comment text are required'}), 400
+
+    comment = { 'id': ObjectId(), 'username': username, 'text': text, 'timestamp': datetime.utcnow() }
+    try:
+        movies.update_one({'_id': ObjectId(movie_id)}, {'$push': {'comments': {'$each': [comment], '$position': 0}}})
+        comment['id'] = str(comment['id'])
+        comment['timestamp'] = comment['timestamp'].strftime('%b %d, %Y')
+        return jsonify({'success': True, 'comment': comment})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/movie/<movie_id>/interactions')
+def get_interactions(movie_id):
+    try:
+        movie = movies.find_one({'_id': ObjectId(movie_id)}, {'likes': 1, 'comments': 1})
+        if movie:
+            likes = movie.get('likes', 0)
+            comments = movie.get('comments', [])
+            for c in comments:
+                c['id'] = str(c['id'])
+                if isinstance(c['timestamp'], datetime):
+                    c['timestamp'] = c['timestamp'].strftime('%b %d, %Y')
+            return jsonify({'success': True, 'likes': likes, 'comments': comments})
+        return jsonify({'success': False, 'message': 'Movie not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# --- Admin and other routes ---
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
     if request.method == 'POST':
