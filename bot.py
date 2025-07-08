@@ -498,13 +498,14 @@ detail_html = """
   .detail-title { font-family: 'Bebas Neue', sans-serif; font-size: 4.5rem; line-height: 1.1; margin-bottom: 20px; }
   .detail-meta { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 25px; font-size: 1rem; color: var(--text-dark); }
   .detail-overview { font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px; }
-  .watch-now-btn, .episode-watch-button { background-color: var(--netflix-red); color: white; padding: 15px 30px; font-size: 1.2rem; font-weight: 700; border: none; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; }
+  .watch-now-btn, .episode-watch-button { background-color: var(--netflix-red); color: white; padding: 15px 30px; font-size: 1.2rem; font-weight: 700; border: none; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; width: 100%; justify-content: center; }
+  .episode-watch-button { font-size: 1rem; padding: 12px 20px; }
   .episode-item { margin-bottom: 10px; }
-
+  
   /* Custom Player Modal Styles */
   .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.9); z-index: 1000; display: flex;
+    background: rgba(0,0,0,0.9); z-index: 1000; display: none;
     justify-content: center; align-items: center; backdrop-filter: blur(5px);
   }
   .modal-container { width: 95%; max-width: 1200px; }
@@ -521,6 +522,8 @@ detail_html = """
 
   @media (max-width: 992px) {
     .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; }
+    .detail-info { max-width: 100%; }
+    .watch-now-btn, .episode-watch-button { max-width: 400px; margin-left: auto; margin-right: auto; }
   }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
@@ -529,7 +532,7 @@ detail_html = """
 <header class="detail-header"><a href="{{ url_for('home') }}" class="back-button"><i class="fas fa-arrow-left"></i> Back to Home</a></header>
 {% if movie %}
 <div class="detail-hero">
-    <div class="detail-hero-background" style="background-image: url('{{ movie.poster }}');"></div>
+    <div class="detail-hero-background" style="background-image: url('{{ movie.poster or '' }}');"></div>
     <div class="detail-content-wrapper">
         <img class="detail-poster" src="{{ movie.poster or 'https://via.placeholder.com/400x600.png?text=No+Image' }}" alt="{{ movie.title }}">
         <div class="detail-info">
@@ -562,7 +565,7 @@ detail_html = """
 {% endif %}
 
 <!-- Custom Player Modal -->
-<div id="playerModal" class="modal-overlay" style="display: none;">
+<div id="playerModal" class="modal-overlay">
     <div class="modal-container">
         <div class="player-wrapper">
             <video id="custom-video-player" controls controlsList="nodownload"></video>
@@ -685,7 +688,7 @@ admin_html = """
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
     th { background: #252525; } td { background: var(--dark-gray); }
     .action-buttons { display: flex; gap: 10px; }
-    .action-buttons a, .action-buttons button, .delete-btn { padding: 6px 12px; border-radius: 4px; text-decoration: none; color: white; border: none; cursor: pointer; transition: opacity 0.3s ease; }
+    .action-buttons a, .action-buttons button { padding: 6px 12px; border-radius: 4px; text-decoration: none; color: white; border: none; cursor: pointer; transition: opacity 0.3s ease; }
     .edit-btn { background: #007bff; } .delete-btn { background: #dc3545; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
     hr.section-divider { border: 0; height: 2px; background-color: var(--light-gray); margin: 40px 0; }
@@ -697,6 +700,8 @@ admin_html = """
   <form action="{{ url_for('save_ads') }}" method="post">
     <div class="form-group"><label>Pop-Under Ad Code</label><textarea name="popunder_code" rows="4">{{ ad_settings.popunder_code or '' }}</textarea></div>
     <div class="form-group"><label>Social Bar Ad Code</label><textarea name="social_bar_code" rows="4">{{ ad_settings.social_bar_code or '' }}</textarea></div>
+    <div class="form-group"><label>Banner Ad Code</label><textarea name="banner_ad_code" rows="4">{{ ad_settings.banner_ad_code or '' }}</textarea></div>
+    <div class="form-group"><label>Native Banner Code</label><textarea name="native_banner_code" rows="4">{{ ad_settings.native_banner_code or '' }}</textarea></div>
     <button type="submit">Save Ad Codes</button>
   </form>
   <hr class="section-divider">
@@ -710,7 +715,12 @@ admin_html = """
     <div id="episode_fields" style="display: none;"><h3>Episodes</h3><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button></div>
     <hr style="border-color: #333; margin: 20px 0;">
     <h3>Manual Details (Optional)</h3>
-    <div class="form-group"><label>Poster URL:</label><input type="url" name="poster_url" /></div><div class="form-group"><label>Overview:</label><textarea name="overview"></textarea></div>
+    <div class="form-group"><label>Poster URL:</label><input type="url" name="poster_url" /></div>
+    <div class="form-group"><label>Overview:</label><textarea name="overview"></textarea></div>
+    <div class="form-group"><label>Genres (Comma-separated):</label><input type="text" name="genres" /></div>
+    <div class="form-group"><label>Poster Badge:</label><input type="text" name="poster_badge" /></div>
+    <div class="form-group"><input type="checkbox" name="is_trending" value="true"><label style="display:inline-block">Is Trending?</label></div>
+    <div class="form-group"><input type="checkbox" name="is_coming_soon" value="true"><label style="display:inline-block">Is Coming Soon?</label></div>
     <button type="submit">Add Content</button>
   </form>
   <hr class="section-divider">
@@ -718,6 +728,9 @@ admin_html = """
   <table><thead><tr><th>Title</th><th>Type</th><th>Views</th><th>Likes</th><th>Actions</th></tr></thead><tbody>
     {% for movie in all_content %}<tr><td>{{ movie.title }}</td><td>{{ movie.type | title }}</td><td>{{ movie.views or 0 }}</td><td>{{ movie.likes or 0 }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="edit-btn">Edit</a><button class="delete-btn" onclick="confirmDelete('{{ movie._id }}', '{{ movie.title }}')">Delete</button></td></tr>{% endfor %}
   </tbody></table>
+  <hr class="section-divider">
+  <h2>User Feedback / Reports</h2>
+  {% if feedback_list %}<table...>{% else %}<p>No new feedback.</p>{% endif %}
   <script>
     function confirmDelete(id, title) { if (confirm('Delete "' + title + '"?')) window.location.href = '/delete_movie/' + id; }
     function toggleEpisodeFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
@@ -823,6 +836,12 @@ contact_html = """
 
 # --- Flask Routes (Fully Updated for Custom Player) ---
 
+def process_movie_list(movie_list): # <--- এই ফাংশনটি আবার যোগ করা হয়েছে
+    for item in movie_list:
+        if '_id' in item:
+            item['_id'] = str(item['_id'])
+    return movie_list
+
 @app.route('/')
 def home():
     query = request.args.get('q')
@@ -897,6 +916,10 @@ def admin():
             "type": content_type,
             "poster": request.form.get("poster_url", "").strip(),
             "overview": request.form.get("overview", "").strip(),
+            "genres": [g.strip() for g in request.form.get("genres", "").split(',') if g.strip()],
+            "poster_badge": request.form.get("poster_badge", "").strip(),
+            "is_trending": request.form.get("is_trending") == "true",
+            "is_coming_soon": request.form.get("is_coming_soon") == "true",
             "likes": 0, "views": 0
         }
         if content_type == "movie":
@@ -915,12 +938,14 @@ def admin():
     
     all_content = process_movie_list(list(movies.find().sort('_id', -1)))
     ad_settings = settings.find_one() or {}
-    return render_template_string(admin_html, all_content=all_content, ad_settings=ad_settings)
+    feedback_list = list(feedback.find().sort('timestamp', -1))
+    return render_template_string(admin_html, all_content=all_content, ad_settings=ad_settings, feedback_list=feedback_list)
 
 @app.route('/edit_movie/<movie_id>', methods=["GET", "POST"])
 @requires_auth
 def edit_movie(movie_id):
     movie_obj = movies.find_one({"_id": ObjectId(movie_id)})
+    if not movie_obj: return "Movie not found", 404
     if request.method == "POST":
         content_type = request.form.get("content_type", "movie")
         update_data = {
@@ -931,7 +956,8 @@ def edit_movie(movie_id):
         }
         if content_type == "movie":
             update_data["watch_link"] = request.form.get("watch_link", "")
-            update_data.pop("episodes", None)
+            if "episodes" in movie_obj:
+                movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"episodes": ""}})
         else:
             episodes = []
             for i in range(len(request.form.getlist('episode_number[]'))):
@@ -941,7 +967,9 @@ def edit_movie(movie_id):
                     "watch_link": request.form.getlist('episode_watch_link[]')[i]
                 })
             update_data["episodes"] = episodes
-            update_data.pop("watch_link", None)
+            if "watch_link" in movie_obj:
+                movies.update_one({"_id": ObjectId(movie_id)}, {"$unset": {"watch_link": ""}})
+
         movies.update_one({"_id": ObjectId(movie_id)}, {"$set": update_data})
         return redirect(url_for('admin'))
     
@@ -958,9 +986,17 @@ def delete_movie(movie_id):
 def save_ads():
     ad_codes = {
         "popunder_code": request.form.get("popunder_code", ""),
-        "social_bar_code": request.form.get("social_bar_code", "")
+        "social_bar_code": request.form.get("social_bar_code", ""),
+        "banner_ad_code": request.form.get("banner_ad_code", ""),
+        "native_banner_code": request.form.get("native_banner_code", "")
     }
     settings.update_one({}, {"$set": ad_codes}, upsert=True)
+    return redirect(url_for('admin'))
+    
+@app.route('/feedback/delete/<feedback_id>')
+@requires_auth
+def delete_feedback(feedback_id):
+    feedback.delete_one({"_id": ObjectId(feedback_id)})
     return redirect(url_for('admin'))
 
 # --- Other Page Routes ---
