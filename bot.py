@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, url_for, Response, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import requests, os
@@ -64,7 +64,16 @@ def inject_ads():
     return dict(ad_settings=(ad_codes or {}))
 
 
-# --- START OF index_html TEMPLATE ---
+# --- টেমপ্লেটগুলো এখানে থাকবে ---
+# index_html, genres_html, admin_html, edit_html, contact_html
+# (নিচের কোডে আমি শুধুমাত্র detail_html রেখেছি, কিন্তু আপনার ফাইলে সবগুলোই থাকবে)
+
+# index_html ( আগের উত্তর থেকে কপি করুন)
+# genres_html ( আগের উত্তর থেকে কপি করুন)
+# admin_html ( আগের উত্তর থেকে কপি করুন)
+# edit_html ( আগের উত্তর থেকে কপি করুন)
+# contact_html ( আগের উত্তর থেকে কপি করুন)
+
 index_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -408,8 +417,6 @@ index_html = """
 </body>
 </html>
 """
-
-# --- START OF genres_html TEMPLATE ---
 genres_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -473,8 +480,6 @@ genres_html = """
 </body>
 </html>
 """
-
-# --- START OF detail_html TEMPLATE (FULLY REBUILT FOR CUSTOM PLAYER) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -501,24 +506,19 @@ detail_html = """
   .watch-now-btn, .episode-watch-button { background-color: var(--netflix-red); color: white; padding: 15px 30px; font-size: 1.2rem; font-weight: 700; border: none; border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; width: 100%; justify-content: center; }
   .episode-watch-button { font-size: 1rem; padding: 12px 20px; }
   .episode-item { margin-bottom: 10px; }
-  
-  /* Custom Player Modal Styles */
+
+  /* Iframe Player Modal Styles */
   .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.9); z-index: 1000; display: none;
     justify-content: center; align-items: center; backdrop-filter: blur(5px);
   }
   .modal-container { width: 95%; max-width: 1200px; }
-  .player-wrapper { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
-  #custom-video-player { width: 100%; height: 100%; border-radius: 8px 8px 0 0; }
-  .player-controls { padding: 15px 20px; background: #181818; border-radius: 0 0 8px 8px; }
-  .controls-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; }
   #modal-title { font-size: 1.5rem; font-weight: 700; color: white; }
   .close-modal-btn { background: none; border: none; color: white; font-size: 2.2rem; cursor: pointer; line-height: 1; }
-  .controls-bottom { display: flex; align-items: center; gap: 20px; }
-  .info-group { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; color: var(--text-dark); }
-  .like-btn { background: none; border: none; color: white; cursor: pointer; font-size: 1.5rem; padding: 0; }
-  .like-btn.liked { color: #00aaff; }
+  .player-wrapper { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
+  .player-wrapper iframe { width: 100%; height: 100%; border: 0; }
 
   @media (max-width: 992px) {
     .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; }
@@ -540,7 +540,7 @@ detail_html = """
             <p class="detail-overview">{{ movie.overview }}</p>
 
             {% if movie.type == 'movie' and movie.watch_link %}
-                <button class="watch-now-btn" onclick="openPlayerModal('{{ movie._id }}', '{{ movie.title }}', '{{ movie.watch_link }}')">
+                <button class="watch-now-btn" onclick="openPlayerModal('{{ movie.title }}', '{{ movie.watch_link }}')">
                     <i class="fas fa-play"></i> Watch Now
                 </button>
             {% elif movie.type == 'series' %}
@@ -548,7 +548,7 @@ detail_html = """
                 {% for ep in movie.episodes | sort(attribute='episode_number') %}
                     {% if ep.watch_link %}
                     <div class="episode-item">
-                        <button class="episode-watch-button" onclick="openPlayerModal('{{ movie._id }}', '{{ movie.title }} - E{{ ep.episode_number }}', '{{ ep.watch_link }}')">
+                        <button class="episode-watch-button" onclick="openPlayerModal('{{ movie.title }} - E{{ ep.episode_number }}', '{{ ep.watch_link }}')">
                             E{{ ep.episode_number }}: {{ ep.title }}
                         </button>
                     </div>
@@ -564,109 +564,48 @@ detail_html = """
   <div style="text-align:center; padding-top:150px;"><h2>Content not found.</h2></div>
 {% endif %}
 
-<!-- Custom Player Modal -->
+<!-- Iframe Player Modal -->
 <div id="playerModal" class="modal-overlay">
     <div class="modal-container">
-        <div class="player-wrapper">
-            <video id="custom-video-player" controls controlsList="nodownload"></video>
+        <div class="modal-header">
+            <h3 id="modal-title"></h3>
+            <button class="close-modal-btn">×</button>
         </div>
-        <div class="player-controls">
-            <div class="controls-top">
-                <h3 id="modal-title"></h3>
-                <button class="close-modal-btn">×</button>
-            </div>
-            <div class="controls-bottom">
-                <button id="modal-like-btn" class="like-btn"><i class="far fa-thumbs-up"></i></button>
-                <div class="info-group">
-                    <span id="like-count">0 Likes</span>
-                    <span>•</span>
-                    <span id="view-count">0 Views</span>
-                </div>
-            </div>
+        <div class="player-wrapper">
+            <iframe id="iframe-player" allowfullscreen></iframe>
         </div>
     </div>
 </div>
 
 <script>
 const playerModal = document.getElementById('playerModal');
-const videoPlayer = document.getElementById('custom-video-player');
+const iframePlayer = document.getElementById('iframe-player');
 const modalTitle = document.getElementById('modal-title');
-const likeBtn = document.getElementById('modal-like-btn');
-const likeCountSpan = document.getElementById('like-count');
-const viewCountSpan = document.getElementById('view-count');
 const closeBtn = document.querySelector('.close-modal-btn');
-let currentMovieId = null;
-let viewTriggered = false;
 
-function openPlayerModal(movieId, title, videoUrl) {
-    currentMovieId = movieId;
+function openPlayerModal(title, videoUrl) {
     modalTitle.textContent = title;
-    videoPlayer.src = videoUrl;
+    iframePlayer.src = videoUrl;
     playerModal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    viewTriggered = false;
-    updateInteractionCounts();
 }
 
 function closePlayerModal() {
     playerModal.style.display = 'none';
-    videoPlayer.pause();
-    videoPlayer.src = "";
+    iframePlayer.src = "";
     document.body.style.overflow = 'auto';
 }
 
 closeBtn.addEventListener('click', closePlayerModal);
 playerModal.addEventListener('click', (e) => {
-    if (e.target === playerModal) closePlayerModal();
-});
-
-videoPlayer.addEventListener('play', () => {
-    if (!viewTriggered) {
-        fetch(`/api/movie/${currentMovieId}/view`, { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    const currentViews = parseInt(viewCountSpan.textContent) || 0;
-                    viewCountSpan.textContent = `${currentViews + 1} Views`;
-                }
-            });
-        viewTriggered = true;
+    if (e.target === playerModal) {
+        closePlayerModal();
     }
 });
-
-likeBtn.addEventListener('click', () => {
-    if (likeBtn.classList.contains('liked')) return;
-    fetch(`/api/movie/${currentMovieId}/like`, { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                localStorage.setItem(`liked_${currentMovieId}`, 'true');
-                updateInteractionCounts();
-            }
-        });
-});
-
-async function updateInteractionCounts() {
-    const response = await fetch(`/api/movie/${currentMovieId}/interactions`);
-    const data = await response.json();
-    if (data.success) {
-        likeCountSpan.textContent = `${data.likes} Likes`;
-        viewCountSpan.textContent = `${data.views} Views`;
-        if (localStorage.getItem(`liked_${currentMovieId}`) === 'true') {
-            likeBtn.classList.add('liked');
-            likeBtn.querySelector('i').className = 'fas fa-thumbs-up';
-        } else {
-            likeBtn.classList.remove('liked');
-            likeBtn.querySelector('i').className = 'far fa-thumbs-up';
-        }
-    }
-}
 </script>
 </body>
 </html>
 """
-
-# --- START OF admin_html TEMPLATE (MODIFIED FOR DIRECT LINK) ---
 admin_html = """
 <!DOCTYPE html>
 <html>
@@ -688,7 +627,7 @@ admin_html = """
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); }
     th { background: #252525; } td { background: var(--dark-gray); }
     .action-buttons { display: flex; gap: 10px; }
-    .action-buttons a, .action-buttons button { padding: 6px 12px; border-radius: 4px; text-decoration: none; color: white; border: none; cursor: pointer; transition: opacity 0.3s ease; }
+    .action-buttons a, .action-buttons button, .delete-btn { padding: 6px 12px; border-radius: 4px; text-decoration: none; color: white; border: none; cursor: pointer; transition: opacity 0.3s ease; }
     .edit-btn { background: #007bff; } .delete-btn { background: #dc3545; }
     .episode-item { border: 1px solid var(--light-gray); padding: 15px; margin-bottom: 15px; border-radius: 5px; }
     hr.section-divider { border: 0; height: 2px; background-color: var(--light-gray); margin: 40px 0; }
@@ -710,7 +649,7 @@ admin_html = """
     <div class="form-group"><label>Title (Required):</label><input type="text" name="title" required /></div>
     <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie">Movie</option><option value="series">TV/Web Series</option></select></div>
     <div id="movie_fields">
-        <div class="form-group"><label>Direct Video Link (.mp4):</label><input type="url" name="watch_link" /></div>
+        <div class="form-group"><label>Watch Link (Koyeb or other embed link):</label><input type="url" name="watch_link" /></div>
     </div>
     <div id="episode_fields" style="display: none;"><h3>Episodes</h3><div id="episodes_container"></div><button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button></div>
     <hr style="border-color: #333; margin: 20px 0;">
@@ -725,8 +664,8 @@ admin_html = """
   </form>
   <hr class="section-divider">
   <h2>Manage Content</h2>
-  <table><thead><tr><th>Title</th><th>Type</th><th>Views</th><th>Likes</th><th>Actions</th></tr></thead><tbody>
-    {% for movie in all_content %}<tr><td>{{ movie.title }}</td><td>{{ movie.type | title }}</td><td>{{ movie.views or 0 }}</td><td>{{ movie.likes or 0 }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="edit-btn">Edit</a><button class="delete-btn" onclick="confirmDelete('{{ movie._id }}', '{{ movie.title }}')">Delete</button></td></tr>{% endfor %}
+  <table><thead><tr><th>Title</th><th>Type</th><th>Actions</th></tr></thead><tbody>
+    {% for movie in all_content %}<tr><td>{{ movie.title }}</td><td>{{ movie.type | title }}</td><td class="action-buttons"><a href="{{ url_for('edit_movie', movie_id=movie._id) }}" class="edit-btn">Edit</a><button class="delete-btn" onclick="confirmDelete('{{ movie._id }}', '{{ movie.title }}')">Delete</button></td></tr>{% endfor %}
   </tbody></table>
   <hr class="section-divider">
   <h2>User Feedback / Reports</h2>
@@ -734,13 +673,11 @@ admin_html = """
   <script>
     function confirmDelete(id, title) { if (confirm('Delete "' + title + '"?')) window.location.href = '/delete_movie/' + id; }
     function toggleEpisodeFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Direct Video Link (.mp4):</label><input type="url" name="episode_watch_link[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
+    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
     document.addEventListener('DOMContentLoaded', toggleEpisodeFields);
   </script>
 </body></html>
 """
-
-# --- START OF edit_html TEMPLATE (MODIFIED FOR DIRECT LINK) ---
 edit_html = """
 <!DOCTYPE html>
 <html>
@@ -763,14 +700,14 @@ edit_html = """
   <form method="post">
     <div class="form-group"><label>Title:</label><input type="text" name="title" value="{{ movie.title }}" required /></div>
     <div class="form-group"><label>Content Type:</label><select name="content_type" id="content_type" onchange="toggleEpisodeFields()"><option value="movie" {% if movie.type == 'movie' %}selected{% endif %}>Movie</option><option value="series" {% if movie.type == 'series' %}selected{% endif %}>TV/Web Series</option></select></div>
-    <div id="movie_fields"><div class="form-group"><label>Direct Video Link (.mp4):</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div></div>
+    <div id="movie_fields"><div class="form-group"><label>Watch Link:</label><input type="url" name="watch_link" value="{{ movie.watch_link or '' }}" /></div></div>
     <div id="episode_fields" style="display: none;">
         <h3>Episodes</h3><div id="episodes_container">
         {% if movie.type == 'series' and movie.episodes %}{% for ep in movie.episodes | sort(attribute='episode_number') %}
         <div class="episode-item">
             <div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" value="{{ ep.episode_number }}" required /></div>
             <div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" value="{{ ep.title }}" required /></div>
-            <div class="form-group"><label>Direct Video Link (.mp4):</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div>
+            <div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" value="{{ ep.watch_link or '' }}" /></div>
             <button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>
         </div>
         {% endfor %}{% endif %}</div><button type="button" onclick="addEpisodeField()" class="add-episode-btn">Add Episode</button>
@@ -783,13 +720,11 @@ edit_html = """
   </form>
   <script>
     function toggleEpisodeFields() { var isSeries = document.getElementById('content_type').value === 'series'; document.getElementById('episode_fields').style.display = isSeries ? 'block' : 'none'; document.getElementById('movie_fields').style.display = isSeries ? 'none' : 'block'; }
-    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Direct Video Link (.mp4):</label><input type="url" name="episode_watch_link[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
+    function addEpisodeField() { const c = document.getElementById('episodes_container'), d = document.createElement('div'); d.className = 'episode-item'; d.innerHTML = `<div class="form-group"><label>Ep Number:</label><input type="number" name="episode_number[]" required /></div><div class="form-group"><label>Ep Title:</label><input type="text" name="episode_title[]" required /></div><div class="form-group"><label>Watch Link:</label><input type="url" name="episode_watch_link[]" /></div><button type="button" onclick="this.parentElement.remove()" class="delete-btn">Remove Ep</button>`; c.appendChild(d); }
     document.addEventListener('DOMContentLoaded', toggleEpisodeFields);
   </script>
 </body></html>
 """
-
-# --- START OF contact_html TEMPLATE ---
 contact_html = """
 <!DOCTYPE html>
 <html lang="bn">
@@ -834,9 +769,10 @@ contact_html = """
 </html>
 """
 
-# --- Flask Routes (Fully Updated for Custom Player) ---
 
-def process_movie_list(movie_list): # <--- এই ফাংশনটি আবার যোগ করা হয়েছে
+# --- Flask Routes ---
+
+def process_movie_list(movie_list):
     for item in movie_list:
         if '_id' in item:
             item['_id'] = str(item['_id'])
@@ -874,38 +810,7 @@ def movie_detail(movie_id):
     except Exception:
         return "Invalid ID", 400
 
-# --- API Endpoints for Custom Player ---
-@app.route('/api/movie/<movie_id>/view', methods=['POST'])
-def record_view(movie_id):
-    try:
-        movies.update_one({'_id': ObjectId(movie_id)}, {'$inc': {'views': 1}}, upsert=True)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/movie/<movie_id>/like', methods=['POST'])
-def like_movie(movie_id):
-    try:
-        movies.update_one({'_id': ObjectId(movie_id)}, {'$inc': {'likes': 1}}, upsert=True)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/movie/<movie_id>/interactions')
-def get_interactions(movie_id):
-    try:
-        movie = movies.find_one({'_id': ObjectId(movie_id)}, {'likes': 1, 'views': 1})
-        if movie:
-            return jsonify({
-                'success': True,
-                'likes': movie.get('likes', 0),
-                'views': movie.get('views', 0)
-            })
-        return jsonify({'success': False, 'message': 'Movie not found'}), 404
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-# --- Admin Routes ---
+# --- Admin Routes (Simplified) ---
 @app.route('/admin', methods=["GET", "POST"])
 @requires_auth
 def admin():
@@ -920,7 +825,6 @@ def admin():
             "poster_badge": request.form.get("poster_badge", "").strip(),
             "is_trending": request.form.get("is_trending") == "true",
             "is_coming_soon": request.form.get("is_coming_soon") == "true",
-            "likes": 0, "views": 0
         }
         if content_type == "movie":
             movie_data["watch_link"] = request.form.get("watch_link", "")
