@@ -146,10 +146,10 @@ index_html = """
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
   .hero-buttons .btn {
-      padding: 8px 20px; /* MODIFIED: Made smaller */
-      margin-right: 0.8rem; /* MODIFIED: Adjusted margin */
+      padding: 8px 20px;
+      margin-right: 0.8rem;
       border: none; border-radius: 4px;
-      font-size: 0.9rem; /* MODIFIED: Made smaller */
+      font-size: 0.9rem;
       font-weight: 700; cursor: pointer; transition: opacity 0.3s ease;
       display: inline-flex; align-items: center; gap: 8px;
   }
@@ -330,7 +330,7 @@ index_html = """
               <h1 class="hero-title">{{ movie.title }}</h1>
               <p class="hero-overview">{{ movie.overview }}</p>
               <div class="hero-buttons">
-                 {% if movie.watch_link and not movie.is_coming_soon %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
+                 {% if movie.watch_link and not movie.is_coming_soon %}<a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-primary"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
                 <a href="{{ url_for('movie_detail', movie_id=movie._id) }}" class="btn btn-secondary"><i class="fas fa-info-circle"></i> More Info</a>
               </div>
             </div>
@@ -478,7 +478,7 @@ genres_html = """
 # --- END OF genres_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE (MODIFIED) ---
+# --- START OF detail_html TEMPLATE (MODIFIED FOR MODAL PLAYER) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -510,7 +510,7 @@ detail_html = """
   .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; background: #000; border-radius: 8px; }
   .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .download-section { margin-top: 30px; }
-  .download-button, .episode-download-button { display: inline-block; padding: 12px 25px; background-color: #444; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px; text-align: center; vertical-align: middle; }
+  .download-button, .episode-download-button { display: inline-block; padding: 12px 25px; background-color: #444; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px; text-align: center; vertical-align: middle; border: none; cursor: pointer; font-family: 'Roboto', sans-serif; font-size: 1rem; }
   .copy-button { background-color: #555; color: white; border: none; padding: 8px 15px; font-size: 0.9rem; cursor: pointer; border-radius: 4px; margin-left: -5px; margin-bottom: 10px; vertical-align: middle; }
   .episode-item { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #333; }
   .episode-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: #fff; }
@@ -528,47 +528,33 @@ detail_html = """
   .movie-card { width: 100%; border-radius: 4px; overflow: hidden; cursor: pointer; transition: transform 0.3s ease; display: block; position: relative; }
   .movie-poster { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; }
   .poster-badge { position: absolute; top: 10px; left: 10px; background-color: var(--netflix-red); color: white; padding: 5px 10px; font-size: 12px; font-weight: 700; border-radius: 4px; z-index: 3; }
-  
-  @keyframes rgb-glow {
-    0% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; } 33% { box-shadow: 0 0 12px #4158D0, 0 0 4px #4158D0; }
-    66% { box-shadow: 0 0 12px #C850C0, 0 0 4px #C850C0; } 100% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; }
-  }
+  @keyframes rgb-glow { 0% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; } 33% { box-shadow: 0 0 12px #4158D0, 0 0 4px #4158D0; } 66% { box-shadow: 0 0 12px #C850C0, 0 0 4px #C850C0; } 100% { box-shadow: 0 0 12px #e50914, 0 0 4px #e50914; } }
   @media (hover: hover) { .movie-card:hover { transform: scale(1.05); z-index: 5; animation: rgb-glow 2.5s infinite linear; } }
-  
-  @media (max-width: 992px) {
-    .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; }
-    .detail-info { max-width: 100%; } .detail-title { font-size: 3.5rem; }
+  @media (max-width: 992px) { .detail-content-wrapper { flex-direction: column; align-items: center; text-align: center; } .detail-info { max-width: 100%; } .detail-title { font-size: 3.5rem; } }
+  @media (max-width: 768px) { .detail-header { padding: 20px; } .detail-hero { padding: 80px 20px 40px; } .detail-poster { width: 60%; max-width: 220px; height: auto; } .detail-title { font-size: 2.2rem; } .watch-now-btn, .download-button, .episode-download-button, .copy-button { display: block; width: 100%; max-width: 320px; margin: 0 auto 10px auto; } .section-title { margin-left: 15px !important; } .related-section-container { padding: 20px 0; } .carousel-content { padding: 0 15px; } .related-movie-card-wrapper { min-width: 130px; } .carousel-arrow { display: none; } }
+
+  /* --- START: Player Modal Styles (NEW) --- */
+  .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.85); z-index: 1000; display: flex;
+      justify-content: center; align-items: center; backdrop-filter: blur(5px);
   }
+  .modal-content {
+      position: relative; background-color: #000; border: 1px solid #333;
+      width: 90%; max-width: 1200px; aspect-ratio: 16 / 9; box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+  }
+  .close-modal-btn {
+      position: absolute; top: -40px; right: 0; color: #fff; font-size: 35px;
+      font-weight: bold; cursor: pointer; transition: color 0.3s;
+  }
+  .close-modal-btn:hover { color: var(--netflix-red); }
+  .video-player-container { width: 100%; height: 100%; }
+  .video-player-container iframe { width: 100%; height: 100%; border: 0; }
   @media (max-width: 768px) {
-    .detail-header { padding: 20px; } .detail-hero { padding: 80px 20px 40px; }
-    .detail-poster { width: 60%; max-width: 220px; height: auto; }
-    .detail-title { font-size: 2.2rem; }
-    .watch-now-btn, .download-button, .episode-download-button, .copy-button { display: block; width: 100%; max-width: 320px; margin: 0 auto 10px auto; }
-    .section-title { margin-left: 15px !important; } .related-section-container { padding: 20px 0; }
-    .carousel-content { padding: 0 15px; } .related-movie-card-wrapper { min-width: 130px; }
-    .carousel-arrow { display: none; }
+      .modal-content { width: 100%; height: auto; aspect-ratio: 16/9; }
+      .close-modal-btn { top: -30px; font-size: 28px; }
   }
-  
-  /* NEW CSS FOR TRAILER SCREENSHOT */
-  .trailer-screenshot-container {
-      position: relative; cursor: pointer; border-radius: 8px;
-      overflow: hidden; margin-top: 30px; max-width: 640px;
-  }
-  .trailer-screenshot-container img {
-      width: 100%; display: block; transition: filter 0.3s ease;
-  }
-  .trailer-screenshot-container:hover img { filter: brightness(0.8); }
-  .trailer-screenshot-container .play-icon {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%); font-size: 5rem;
-      color: rgba(255, 255, 255, 0.8);
-      text-shadow: 0 0 15px rgba(0,0,0,0.5);
-      pointer-events: none;
-      transition: transform 0.3s ease, color 0.3s ease;
-  }
-  .trailer-screenshot-container:hover .play-icon {
-      transform: translate(-50%, -50%) scale(1.1); color: #fff;
-  }
+  /* --- END: Player Modal Styles --- */
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
@@ -594,32 +580,29 @@ detail_html = """
         {% if movie.genres %}<span>{{ movie.genres | join(' • ') }}</span>{% endif %}
       </div>
       <p class="detail-overview">{{ movie.overview }}</p>
-      {% if movie.watch_link and movie.type == 'movie' and not movie.is_coming_soon %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="watch-now-btn"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
-      {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
       
-      <!-- MODIFIED TRAILER SECTION -->
-      {% if trailer_key %}
-      <div class="trailer-section">
-          <h3 class="section-title">Watch Trailer</h3>
-          <div id="screenshot-wrapper" class="trailer-screenshot-container" style="{% if not screenshot_url %}display:none;{% endif %}">
-            {% if screenshot_url %}
-              <img src="{{ screenshot_url }}" alt="{{ movie.title }} Trailer Thumbnail">
-              <i class="fas fa-play-circle play-icon"></i>
-            {% endif %}
-          </div>
-          <div id="video-wrapper" class="video-container" style="display:none;">
-              <iframe data-src="https://www.youtube.com/embed/{{ trailer_key }}?autoplay=1" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>
-          </div>
-      </div>
+      <!-- MODIFIED: Watch button is now a button with data-attribute -->
+      {% if movie.watch_link and movie.type == 'movie' and not movie.is_coming_soon %}
+        <button class="watch-now-btn" data-watch-url="{{ movie.watch_link }}">
+            <i class="fas fa-play"></i> Watch Now
+        </button>
       {% endif %}
-      <!-- END OF MODIFIED TRAILER SECTION -->
-      
+
+      {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
+      {% if trailer_key %}<div class="trailer-section"><h3 class="section-title">Watch Trailer</h3><div class="video-container"><iframe src="https://www.youtube.com/embed/{{ trailer_key }}" frameborder="0" allowfullscreen></iframe></div></div>{% endif %}
       {% if ad_settings.native_banner_code %}<div class="ad-container">{{ ad_settings.native_banner_code|safe }}</div>{% endif %}
       <div style="margin: 20px 0;"><a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="download-button" style="background-color:#5a5a5a; text-align:center;"><i class="fas fa-flag"></i> Report a Problem</a></div>
       <div class="download-section">
         {% if movie.is_coming_soon %}<h3 class="section-title">Coming Soon</h3>
         {% elif movie.type == 'movie' and movie.links %}<h3 class="section-title">Download Links</h3>{% for link_item in movie.links %}<div><a class="download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }} [{{ link_item.size or 'N/A' }}]</a><button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i> Copy</button></div>{% endfor %}
-        {% elif movie.type == 'series' and movie.episodes %}<h3 class="section-title">Episodes</h3>{% for episode in movie.episodes | sort(attribute='episode_number') %}<div class="episode-item"><h4 class="episode-title">E{{ episode.episode_number }}: {{ episode.title }}</h4>{% if episode.overview %}<p class="episode-overview-text">{{ episode.overview }}</p>{% endif %}{% if episode.watch_link %}<a href="{{ url_for('watch_movie', movie_id=movie._id, ep=episode.episode_number) }}" class="episode-download-button" style="background-color: var(--netflix-red);"><i class="fas fa-play"></i> Watch Episode</a>{% endif %}{% if episode.links %}{% for link_item in episode.links %}<div><a class="episode-download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }}</a><button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i></button></div>{% endfor %}{% endif %}</div>{% endfor %}
+        {% elif movie.type == 'series' and movie.episodes %}<h3 class="section-title">Episodes</h3>{% for episode in movie.episodes | sort(attribute='episode_number') %}<div class="episode-item"><h4 class="episode-title">E{{ episode.episode_number }}: {{ episode.title }}</h4>{% if episode.overview %}<p class="episode-overview-text">{{ episode.overview }}</p>{% endif %}
+        
+        <!-- MODIFIED: Watch Episode button is now a button with data-attribute -->
+        {% if episode.watch_link %}
+            <button class="episode-download-button" style="background-color: var(--netflix-red);" data-watch-url="{{ episode.watch_link }}"><i class="fas fa-play"></i> Watch Episode</button>
+        {% endif %}
+
+        {% if episode.links %}{% for link_item in episode.links %}<div><a class="episode-download-button" href="{{ link_item.url }}" target="_blank" rel="noopener"><i class="fas fa-download"></i> {{ link_item.quality }}</a><button class="copy-button" onclick="copyToClipboard('{{ link_item.url }}')"><i class="fas fa-copy"></i></button></div>{% endfor %}{% endif %}</div>{% endfor %}
         {% endif %}
         {% if not movie.links and not movie.episodes and not movie.is_coming_soon %}<p class="no-link-message">No download links available.</p>{% endif %}
       </div>
@@ -639,6 +622,17 @@ detail_html = """
 </div>
 {% endif %}
 {% else %}<div style="display:flex; justify-content:center; align-items:center; height:100vh;"><h2>Content not found.</h2></div>{% endif %}
+
+<!-- NEW: Player Modal Structure -->
+<div id="playerModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <span class="close-modal-btn">×</span>
+        <div class="video-player-container">
+            <!-- The iframe will be injected here by JavaScript -->
+        </div>
+    </div>
+</div>
+
 <script>
 function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('Link copied!'), () => alert('Copy failed!')); }
 document.querySelectorAll('.carousel-arrow').forEach(button => {
@@ -649,20 +643,55 @@ document.querySelectorAll('.carousel-arrow').forEach(button => {
     });
 });
 
-// NEW JAVASCRIPT FOR TRAILER
+// --- START: Modal Player Logic (NEW) ---
 document.addEventListener('DOMContentLoaded', () => {
-    const screenshotWrapper = document.getElementById('screenshot-wrapper');
-    const videoWrapper = document.getElementById('video-wrapper');
-    const iframe = videoWrapper ? videoWrapper.querySelector('iframe') : null;
+    const playerModal = document.getElementById('playerModal');
+    if (!playerModal) return; // Exit if modal not found
+    const modalPlayerContainer = playerModal.querySelector('.video-player-container');
+    const closeModalBtn = playerModal.querySelector('.close-modal-btn');
 
-    if (screenshotWrapper && videoWrapper && iframe) {
-        screenshotWrapper.addEventListener('click', () => {
-            iframe.src = iframe.dataset.src;
-            screenshotWrapper.style.display = 'none';
-            videoWrapper.style.display = 'block';
-        });
+    function openPlayer(watchUrl) {
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('src', watchUrl);
+        iframe.setAttribute('allowfullscreen', '');
+        iframe.setAttribute('allowtransparency', '');
+        iframe.setAttribute('allow', 'autoplay');
+        iframe.setAttribute('scrolling', 'no');
+        iframe.setAttribute('frameborder', '0');
+        modalPlayerContainer.innerHTML = '';
+        modalPlayerContainer.appendChild(iframe);
+        playerModal.style.display = 'flex';
     }
+
+    function closePlayer() {
+        modalPlayerContainer.innerHTML = ''; // This stops the video
+        playerModal.style.display = 'none';
+    }
+
+    document.querySelectorAll('[data-watch-url]').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const watchUrl = event.currentTarget.dataset.watchUrl;
+            if (watchUrl) {
+                openPlayer(watchUrl);
+            }
+        });
+    });
+
+    closeModalBtn.addEventListener('click', closePlayer);
+
+    playerModal.addEventListener('click', (event) => {
+        if (event.target === playerModal) {
+            closePlayer();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && playerModal.style.display === 'flex') {
+            closePlayer();
+        }
+    });
 });
+// --- END: Modal Player Logic ---
 </script>
 {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
 {% if ad_settings.social_bar_code %}{{ ad_settings.social_bar_code|safe }}{% endif %}
@@ -956,8 +985,8 @@ def home():
         "latest_movies": process_movie_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "latest_series": process_movie_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "coming_soon_movies": process_movie_list(list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit))),
-        "recently_added": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(6))),
-        "recently_added_full": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
+        "recently_added": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(6))), # For hero slider
+        "recently_added_full": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))), # For carousel
         "is_full_page_list": False, "query": "", "all_badges": all_badges
     }
     return render_template_string(index_html, **context)
@@ -977,23 +1006,12 @@ def movie_detail(movie_id):
         if not related_movies:
             related_movies = list(movies.find({"_id": {"$ne": ObjectId(movie_id)}, "is_coming_soon": {"$ne": True}}).sort("_id", -1).limit(12))
 
-        tmdb_type = "tv" if movie.get("type") == "series" else "movie"
-        trailer_key = get_trailer_key(movie.get("tmdb_id"), tmdb_type)
+        trailer_key = get_trailer_key(movie.get("tmdb_id"), "tv" if movie.get("type") == "series" else "movie")
         
-        screenshot_url = None
-        if trailer_key:
-            screenshot_url = f"https://img.youtube.com/vi/{trailer_key}/sddefault.jpg"
-        
-        return render_template_string(
-            detail_html, 
-            movie=movie, 
-            trailer_key=trailer_key, 
-            related_movies=process_movie_list(related_movies),
-            screenshot_url=screenshot_url
-        )
+        return render_template_string(detail_html, movie=movie, trailer_key=trailer_key, related_movies=process_movie_list(related_movies))
     except Exception as e:
         print(f"Error in movie_detail: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None, related_movies=[], screenshot_url=None)
+        return render_template_string(detail_html, movie=None, trailer_key=None, related_movies=[])
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
