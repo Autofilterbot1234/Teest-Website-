@@ -478,7 +478,7 @@ genres_html = """
 # --- END OF genres_html TEMPLATE ---
 
 
-# --- START OF detail_html TEMPLATE ---
+# --- START OF detail_html TEMPLATE (MODIFIED) ---
 detail_html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -548,6 +548,27 @@ detail_html = """
     .carousel-content { padding: 0 15px; } .related-movie-card-wrapper { min-width: 130px; }
     .carousel-arrow { display: none; }
   }
+  
+  /* NEW CSS FOR TRAILER SCREENSHOT */
+  .trailer-screenshot-container {
+      position: relative; cursor: pointer; border-radius: 8px;
+      overflow: hidden; margin-top: 30px; max-width: 640px;
+  }
+  .trailer-screenshot-container img {
+      width: 100%; display: block; transition: filter 0.3s ease;
+  }
+  .trailer-screenshot-container:hover img { filter: brightness(0.8); }
+  .trailer-screenshot-container .play-icon {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); font-size: 5rem;
+      color: rgba(255, 255, 255, 0.8);
+      text-shadow: 0 0 15px rgba(0,0,0,0.5);
+      pointer-events: none;
+      transition: transform 0.3s ease, color 0.3s ease;
+  }
+  .trailer-screenshot-container:hover .play-icon {
+      transform: translate(-50%, -50%) scale(1.1); color: #fff;
+  }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
@@ -575,7 +596,24 @@ detail_html = """
       <p class="detail-overview">{{ movie.overview }}</p>
       {% if movie.watch_link and movie.type == 'movie' and not movie.is_coming_soon %}<a href="{{ url_for('watch_movie', movie_id=movie._id) }}" class="watch-now-btn"><i class="fas fa-play"></i> Watch Now</a>{% endif %}
       {% if ad_settings.banner_ad_code %}<div class="ad-container">{{ ad_settings.banner_ad_code|safe }}</div>{% endif %}
-      {% if trailer_key %}<div class="trailer-section"><h3 class="section-title">Watch Trailer</h3><div class="video-container"><iframe src="https://www.youtube.com/embed/{{ trailer_key }}" frameborder="0" allowfullscreen></iframe></div></div>{% endif %}
+      
+      <!-- MODIFIED TRAILER SECTION -->
+      {% if trailer_key %}
+      <div class="trailer-section">
+          <h3 class="section-title">Watch Trailer</h3>
+          <div id="screenshot-wrapper" class="trailer-screenshot-container" style="{% if not screenshot_url %}display:none;{% endif %}">
+            {% if screenshot_url %}
+              <img src="{{ screenshot_url }}" alt="{{ movie.title }} Trailer Thumbnail">
+              <i class="fas fa-play-circle play-icon"></i>
+            {% endif %}
+          </div>
+          <div id="video-wrapper" class="video-container" style="display:none;">
+              <iframe data-src="https://www.youtube.com/embed/{{ trailer_key }}?autoplay=1" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>
+          </div>
+      </div>
+      {% endif %}
+      <!-- END OF MODIFIED TRAILER SECTION -->
+      
       {% if ad_settings.native_banner_code %}<div class="ad-container">{{ ad_settings.native_banner_code|safe }}</div>{% endif %}
       <div style="margin: 20px 0;"><a href="{{ url_for('contact', report_id=movie._id, title=movie.title) }}" class="download-button" style="background-color:#5a5a5a; text-align:center;"><i class="fas fa-flag"></i> Report a Problem</a></div>
       <div class="download-section">
@@ -609,6 +647,21 @@ document.querySelectorAll('.carousel-arrow').forEach(button => {
         const scrollAmount = carousel.clientWidth * 0.8;
         carousel.scrollLeft += button.classList.contains('next') ? scrollAmount : -scrollAmount;
     });
+});
+
+// NEW JAVASCRIPT FOR TRAILER
+document.addEventListener('DOMContentLoaded', () => {
+    const screenshotWrapper = document.getElementById('screenshot-wrapper');
+    const videoWrapper = document.getElementById('video-wrapper');
+    const iframe = videoWrapper ? videoWrapper.querySelector('iframe') : null;
+
+    if (screenshotWrapper && videoWrapper && iframe) {
+        screenshotWrapper.addEventListener('click', () => {
+            iframe.src = iframe.dataset.src;
+            screenshotWrapper.style.display = 'none';
+            videoWrapper.style.display = 'block';
+        });
+    }
 });
 </script>
 {% if ad_settings.popunder_code %}{{ ad_settings.popunder_code|safe }}{% endif %}
@@ -897,14 +950,14 @@ def home():
     all_badges = movies.distinct("poster_badge")
     all_badges = sorted([badge for badge in all_badges if badge])
 
-    limit = 12 # MODIFIED: Changed from 18 to 12
+    limit = 12
     context = {
         "trending_movies": process_movie_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "latest_movies": process_movie_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "latest_series": process_movie_list(list(movies.find({"type": "series", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "coming_soon_movies": process_movie_list(list(movies.find({"is_coming_soon": True}).sort('_id', -1).limit(limit))),
-        "recently_added": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(6))), # For hero slider
-        "recently_added_full": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))), # For carousel
+        "recently_added": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(6))),
+        "recently_added_full": process_movie_list(list(movies.find({"is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "is_full_page_list": False, "query": "", "all_badges": all_badges
     }
     return render_template_string(index_html, **context)
@@ -924,12 +977,23 @@ def movie_detail(movie_id):
         if not related_movies:
             related_movies = list(movies.find({"_id": {"$ne": ObjectId(movie_id)}, "is_coming_soon": {"$ne": True}}).sort("_id", -1).limit(12))
 
-        trailer_key = get_trailer_key(movie.get("tmdb_id"), "tv" if movie.get("type") == "series" else "movie")
+        tmdb_type = "tv" if movie.get("type") == "series" else "movie"
+        trailer_key = get_trailer_key(movie.get("tmdb_id"), tmdb_type)
         
-        return render_template_string(detail_html, movie=movie, trailer_key=trailer_key, related_movies=process_movie_list(related_movies))
+        screenshot_url = None
+        if trailer_key:
+            screenshot_url = f"https://img.youtube.com/vi/{trailer_key}/sddefault.jpg"
+        
+        return render_template_string(
+            detail_html, 
+            movie=movie, 
+            trailer_key=trailer_key, 
+            related_movies=process_movie_list(related_movies),
+            screenshot_url=screenshot_url
+        )
     except Exception as e:
         print(f"Error in movie_detail: {e}")
-        return render_template_string(detail_html, movie=None, trailer_key=None, related_movies=[])
+        return render_template_string(detail_html, movie=None, trailer_key=None, related_movies=[], screenshot_url=None)
 
 @app.route('/watch/<movie_id>')
 def watch_movie(movie_id):
