@@ -1,5 +1,3 @@
-# filename: app.py
-
 from flask import Flask, render_template_string, request, redirect, url_for, Response
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -8,7 +6,7 @@ from functools import wraps
 from dotenv import load_dotenv
 from datetime import datetime
 
-# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন (শুধুমাত্র লোকাল ডেভেলপমেন্টের জন্য)
+# .env ফাইল থেকে এনভায়রনমেন্ট ভেরিয়েবল লোড করুন
 load_dotenv()
 
 app = Flask(__name__)
@@ -899,7 +897,7 @@ def home():
     all_badges = movies.distinct("poster_badge")
     all_badges = sorted([badge for badge in all_badges if badge])
 
-    limit = 12
+    limit = 12 # MODIFIED: Changed from 18 to 12
     context = {
         "trending_movies": process_movie_list(list(movies.find({"is_trending": True, "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
         "latest_movies": process_movie_list(list(movies.find({"type": "movie", "is_coming_soon": {"$ne": True}}).sort('_id', -1).limit(limit))),
